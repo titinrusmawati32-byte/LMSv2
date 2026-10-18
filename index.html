@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A8A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="EduDigital">
+  <title>LMS EduDigital SD - SDN Sumberejo 04</title>
+
+  <!-- Google Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- SheetJS untuk Fitur Import/Export Excel Kuis & Tugas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- Container Form Autentikasi / Login -->
+  <div id="auth" class="hidden"></div>
+
+  <!-- Container Utama Aplikasi -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo"><span class="material-symbols-outlined">school</span></span>
+        <span>
+          <span class="bt">EduDigital SD</span>
+          <span class="bs">Learning Management System</span>
+        </span>
+      </div>
+      <nav class="sidenav" id="sidenav"></nav>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <h1 id="ttl">Beranda</h1>
+        <div class="actions">
+          <div class="user-chip" id="uchip"></div>
+          <button type="button" class="btn ghost" data-act="go" data-to="#/pengaturan" aria-label="Pengaturan">
+            <span class="material-symbols-outlined">settings</span>
+          </button>
+        </div>
+      </header>
+      <main class="main" id="view"></main>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation (Mobile) -->
+  <nav class="bnav hidden" id="bnav"></nav>
+
+  <!-- PWA Install Banner -->
+  <div id="install" class="install hidden"></div>
+
+  <!-- Offline Notice Screen -->
+  <div id="offline" class="offline hidden">
+    <div class="icon-circle" style="width:88px;height:88px">
+      <span class="material-symbols-outlined fs40">cloud_off</span>
+    </div>
+    <h2 style="margin-top:16px">Anda sedang offline</h2>
+    <p class="muted">Periksa koneksi internet, lalu coba lagi.</p>
+    <button type="button" class="btn" data-act="retry-online">Coba Lagi</button>
+  </div>
+
+  <!-- Dialog / Modal Layer -->
+  <div id="modal" class="modal hidden"></div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Application Logic & Config Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
