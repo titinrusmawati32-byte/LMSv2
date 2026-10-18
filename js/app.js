@@ -511,6 +511,10 @@ const PV = (() => {
       { id: 'g1', kelas_id: '', judul: 'Libur Nasional', isi: 'Sekolah libur pada hari Senin. Kegiatan belajar dilanjutkan hari Selasa.', dibuat_oleh: 'u1', dibuat_pada: '2026-10-10T02:00:00.000Z' },
       { id: 'g2', kelas_id: 'k1', judul: 'Jadwal Pengumpulan Proyek', isi: 'Harap kumpulkan foto hasil tugas sebelum Selasa pukul 16.00.', dibuat_oleh: 'u2', dibuat_pada: '2026-10-12T04:00:00.000Z' }
     ],
+    bank: [
+      { id: 'bs1', mapel: 'Matematika', kelas: 'Kelas 4', bab: 'Pecahan', jenis_soal: 'pg', pertanyaan: 'Pecahan yang senilai dengan 1/2 adalah...', gambar_id: '', opsi_a: '2/4', opsi_b: '1/3', opsi_c: '2/3', opsi_d: '3/4', opsi_e: '', jawaban_benar: 'A', bobot: 1, pembahasan: '1/2 dikalikan 2/2 = 2/4', tingkat_kesulitan: 'Mudah', dibuat_oleh: 'u2', dibuat_pada: '2026-10-11T02:00:00.000Z' },
+      { id: 'bs2', mapel: 'IPAS', kelas: 'Kelas 4', bab: 'Fotosintesis', jenis_soal: 'pg', pertanyaan: 'Gas yang diserap tumbuhan saat fotosintesis adalah...', gambar_id: '', opsi_a: 'Oksigen', opsi_b: 'Karbon dioksida', opsi_c: 'Nitrogen', opsi_d: 'Hidrogen', opsi_e: '', jawaban_benar: 'B', bobot: 1, pembahasan: 'Tumbuhan menyerap CO2 dan menghasilkan O2', tingkat_kesulitan: 'Sedang', dibuat_oleh: 'u2', dibuat_pada: '2026-10-12T02:00:00.000Z' }
+    ],
     foto: {},
     sesi: {}
   };
@@ -864,9 +868,54 @@ const PV = (() => {
     },
     quizPageData(u, p) {
       return {
-        quizzes: PV.run('quizList', p, state.token),
+        quizzes: H.quizList(u, p),
         bank: (u.role === 'guru' || u.role === 'admin') ? (D.bank || []) : []
       };
+    },
+    bankSoalList(u, p) {
+      need(u, ['guru', 'admin']);
+      return (D.bank || []).filter(q => u.role === 'admin' || q.dibuat_oleh === u.id);
+    },
+    bankSoalSave(u, p) {
+      need(u, ['guru', 'admin']);
+      if (!D.bank) D.bank = [];
+      const id = p.id || nid('bs');
+      const idx = D.bank.findIndex(x => x.id === id);
+      const item = {
+        id,
+        mapel: p.mapel || 'Umum',
+        kelas: p.kelas || '',
+        bab: p.bab || '',
+        jenis_soal: p.jenis_soal || 'pg',
+        pertanyaan: p.pertanyaan || '',
+        gambar_id: p.gambar_id || '',
+        opsi_a: p.opsi_a || '',
+        opsi_b: p.opsi_b || '',
+        opsi_c: p.opsi_c || '',
+        opsi_d: p.opsi_d || '',
+        opsi_e: p.opsi_e || '',
+        jawaban_benar: (p.jawaban_benar || 'A').toUpperCase(),
+        bobot: Number(p.bobot) || 1,
+        pembahasan: p.pembahasan || '',
+        tingkat_kesulitan: p.tingkat_kesulitan || 'Sedang',
+        dibuat_oleh: u.id,
+        dibuat_pada: iso()
+      };
+      if (idx >= 0) D.bank[idx] = item;
+      else D.bank.unshift(item);
+      return item;
+    },
+    bankSoalDelete(u, p) {
+      need(u, ['guru', 'admin']);
+      if (!D.bank) D.bank = [];
+      D.bank = D.bank.filter(x => x.id !== p.id);
+      return true;
+    },
+    quizSaveDraft(u, p) {
+      need(u, ['siswa']);
+      let j = D.jawaban.find(x => x.kuis_id === p.id && x.siswa_id === u.id);
+      if (j) j.draft_jawaban = JSON.stringify(p.answers || {});
+      return true;
     },
     quizSave(u, p) {
       need(u, ['guru']); ownKelas(u, p.kelas_id);
@@ -1218,6 +1267,7 @@ async function pageTugasDetail(id) {
 /* ===================== HALAMAN: KUIS ===================== */
 async function pageKuis() {
   const u = state.user;
+  const tab = state.kuisTab || 'daftar';
   let list = [], bank = [];
   try {
     const res = await api('quizPageData');
@@ -1229,22 +1279,92 @@ async function pageKuis() {
       bank = await api('bankSoalList');
     }
   }
-  const btn = u.role === 'guru' ? '<div class="row-g"><button type="button" class="btn sec" data-act="download-template" data-type="soal">' + ic('download') + ' Template Excel</button><button type="button" class="btn sec" data-act="upload-gambar-soal" title="Upload Gambar untuk Excel">' + ic('image') + '</button><button type="button" class="btn sec" data-act="upload-excel" data-type="soal">' + ic('upload_file') + ' Impor Bank Soal</button><button type="button" class="btn" data-act="pick-class-quiz">' + ic('add') + ' Buat Kuis</button></div>' : '';
-  let bankSection = '';
-  if (u.role === 'guru' || u.role === 'admin') {
-    const previewBtn = bank.length ? '<button type="button" class="btn sec sm" data-act="bank-preview">' + ic('visibility') + ' Pratinjau / Edit Bank Soal (' + bank.length + ')</button>' : '';
-    bankSection = '<section class="mt"><div class="h2row"><h2 class="h2">Bank Soal Tersimpan (' + bank.length + ')</h2>' + previewBtn + '</div>'
-      + (bank.length ? '<div class="list">' + bank.map((q, i) => '<article class="card"><div class="row-g"><span class="badge b-info">' + esc(q.mapel) + '</span><span class="muted">' + (i + 1) + '</span></div>'
-        + '<div class="t-md mt8">' + esc(q.pertanyaan) + '</div>'
-        + '<div class="mt8 muted">A. ' + esc(q.opsi_a) + '</div><div class="muted">B. ' + esc(q.opsi_b) + '</div>'
-        + '<div class="muted">C. ' + esc(q.opsi_c) + '</div><div class="muted">D. ' + esc(q.opsi_d) + '</div>'
-        + (q.opsi_e ? '<div class="muted">E. ' + esc(q.opsi_e) + '</div>' : '')
-        + '<div class="mt8"><b>Kunci: ' + esc(q.jawaban_benar) + '</b></div>'
-        + (q.pembahasan ? '<details class="mt8"><summary>Lihat pembahasan</summary><p>' + esc(q.pembahasan) + '</p></details>' : '')
-        + '</article>').join('') + '</div>' : empty('Belum ada soal hasil impor. Unggah file Excel menggunakan template Bank Soal.')) + '</section>';
+
+  // Top buttons
+  const isTeacher = u.role === 'guru' || u.role === 'admin';
+  const btn = isTeacher ? '<div class="row-g">'
+    + '<button type="button" class="btn sec sm" data-act="download-template" data-type="soal">' + ic('download') + ' Template Excel</button>'
+    + '<button type="button" class="btn sec sm" data-act="upload-excel" data-type="soal">' + ic('upload_file') + ' Impor Excel</button>'
+    + '<button type="button" class="btn sec sm" data-act="bank-soal-new">' + ic('note_add') + ' Tambah Soal</button>'
+    + '<button type="button" class="btn sm" data-act="pick-class-quiz">' + ic('add') + ' Buat Paket Ujian</button>'
+    + '</div>' : '';
+
+  // Tab Bar for Teachers / Admins
+  let subnav = '';
+  if (isTeacher) {
+    subnav = '<div class="subnav-wrap">'
+      + '<button type="button" class="subnav-btn ' + (tab === 'daftar' ? 'active' : '') + '" data-act="kuis-tab" data-tab="daftar">' + ic('quiz') + ' Paket Ujian <span class="badge-pill">' + list.length + '</span></button>'
+      + '<button type="button" class="subnav-btn ' + (tab === 'bank' ? 'active' : '') + '" data-act="kuis-tab" data-tab="bank">' + ic('inventory_2') + ' Bank Soal <span class="badge-pill">' + bank.length + '</span></button>'
+      + '</div>';
   }
-  return pageHead('Kuis', btn) + '<h2 class="h2">Daftar Kuis</h2><div class="list">' + (list.length ? list.map(quizCard).join('') : empty('Belum ada kuis.')) + '</div>' + bankSection;
+
+  // Content for Tab 1: Paket Ujian / Kuis
+  const kuisContent = '<div class="list">' + (list.length ? list.map(quizCard).join('') : empty('Belum ada kuis atau paket ujian aktif.')) + '</div>';
+
+  // Content for Tab 2: Bank Soal
+  let bankContent = '';
+  if (isTeacher) {
+    const filterMapel = state.bankFilterMapel || '';
+    const qSearch = (state.bankSearch || '').toLowerCase();
+    const mapels = [...new Set(bank.map(x => x.mapel).filter(Boolean))];
+
+    const filteredBank = bank.filter(q => {
+      const matchMapel = !filterMapel || q.mapel === filterMapel;
+      const matchQ = !qSearch || String(q.pertanyaan || '').toLowerCase().includes(qSearch) || String(q.bab || '').toLowerCase().includes(qSearch);
+      return matchMapel && matchQ;
+    });
+
+    const filterChips = ['<button type="button" class="chip ' + (!filterMapel ? 'on' : '') + '" data-act="bank-filter-mapel" data-mapel="">Semua Mapel</button>']
+      .concat(mapels.map(m => '<button type="button" class="chip ' + (filterMapel === m ? 'on' : '') + '" data-act="bank-filter-mapel" data-mapel="' + esc(m) + '">' + esc(m) + '</button>'))
+      .join('');
+
+    const searchAndFilter = '<div class="card" style="margin-bottom:16px;">'
+      + '<div class="row"><input type="search" placeholder="Cari pertanyaan, materi, atau bab..." value="' + esc(state.bankSearch || '') + '" data-act="bank-search-input" style="max-width:400px;margin:0;">'
+      + '<div class="row-g">'
+      + (bank.length ? '<button type="button" class="btn sec sm" data-act="bank-preview">' + ic('preview') + ' Pratinjau Massal (' + bank.length + ')</button>' : '')
+      + '<button type="button" class="btn sm" data-act="bank-soal-new">' + ic('add') + ' Buat Soal Baru</button>'
+      + '</div></div>'
+      + (mapels.length ? '<div class="chips mt" style="margin-top:12px;">' + filterChips + '</div>' : '')
+      + '</div>';
+
+    const bankCards = filteredBank.length ? filteredBank.map((q, i) => {
+      const imgHtml = q.gambar_id
+        ? '<div class="quiz-img-box" style="margin:8px 0;"><img src="https://lh3.googleusercontent.com/d/' + encodeURIComponent(q.gambar_id) + '" onerror="this.src=\'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(q.gambar_id) + '\'" alt="Gambar Soal" loading="lazy"></div>'
+        : '';
+      return '<article class="bank-item card">'
+        + '<div class="bank-header"><div class="row-g">'
+        + '<span class="badge b-info">' + esc(q.mapel || 'Umum') + '</span>'
+        + (q.kelas ? '<span class="badge b-gray">' + esc(q.kelas) + '</span>' : '')
+        + (q.bab ? '<span class="badge b-gray">' + esc(q.bab) + '</span>' : '')
+        + (q.tingkat_kesulitan ? '<span class="badge ' + (q.tingkat_kesulitan === 'Sulit' ? 'b-bad' : (q.tingkat_kesulitan === 'Mudah' ? 'b-ok' : 'b-warn')) + '">' + esc(q.tingkat_kesulitan) + '</span>' : '')
+        + '</div>'
+        + '<div class="row-g">'
+        + '<button type="button" class="btn ghost sm" data-act="bank-soal-edit" data-id="' + q.id + '" title="Edit Soal">' + ic('edit') + '</button>'
+        + '<button type="button" class="btn ghost sm" data-act="bank-soal-del" data-id="' + q.id + '" title="Hapus Soal" style="color:var(--bad-main);">' + ic('delete') + '</button>'
+        + '</div></div>'
+        + '<div class="t-md mt8">' + (i + 1) + '. ' + esc(q.pertanyaan) + '</div>'
+        + imgHtml
+        + '<div class="bank-opt-grid mt8">'
+        + ['a', 'b', 'c', 'd', 'e'].filter(k => q['opsi_' + k]).map(k => {
+          const isKey = String(q.jawaban_benar || '').trim().toUpperCase() === k.toUpperCase();
+          return '<div class="bank-opt-item ' + (isKey ? 'correct-opt' : '') + '">'
+            + '<span class="bank-opt-letter">' + k.toUpperCase() + '</span>'
+            + '<span>' + esc(q['opsi_' + k]) + '</span>'
+            + (isKey ? '<span class="badge b-ok" style="margin-left:auto;padding:2px 6px;font-size:0.75rem;">Kunci</span>' : '')
+            + '</div>';
+        }).join('')
+        + '</div>'
+        + (q.pembahasan ? '<details class="mt8"><summary class="muted" style="cursor:pointer;font-weight:600;">Lihat Pembahasan</summary><p class="muted" style="margin:4px 0 0 12px;">' + esc(q.pembahasan) + '</p></details>' : '')
+        + '</article>';
+    }).join('') : empty('Tidak ada soal yang cocok dengan filter.');
+
+    bankContent = searchAndFilter + '<div class="list">' + bankCards + '</div>';
+  }
+
+  const activeContent = (!isTeacher || tab === 'daftar') ? kuisContent : bankContent;
+  return pageHead('Kuis & Bank Soal', btn) + subnav + activeContent;
 }
+
 async function pageKuisDetail(id) {
   const u = state.user;
   if (u.role !== 'siswa') {
@@ -1266,28 +1386,63 @@ async function pageKuisDetail(id) {
         + '<a class="btn block" href="#/kuis/' + id + '/kerjakan">' + ic('play_arrow') + ' ' + (a ? 'Lanjutkan Kuis' : 'Mulai Kuis') + '</a>')
     + '</div>';
 }
+
 async function pageKerjakan(id) {
   if (!state.quiz || state.quiz.id !== id) {
     const r = await api('quizStart', { id: id });
-    state.quiz = { id: id, judul: r.judul, soal: r.soal, idx: 0, answers: {}, end: new Date(r.waktu_mulai).getTime() + r.durasi_menit * 60000 };
+    state.quiz = {
+      id: id,
+      judul: r.judul,
+      soal: r.soal,
+      idx: 0,
+      answers: {},
+      end: new Date(r.waktu_mulai).getTime() + r.durasi_menit * 60000
+    };
   }
   return '<div id="qwrap">' + quizHtml() + '</div>';
 }
+
 function quizHtml() {
   const q = state.quiz;
   const s = q.soal[q.idx];
   const n = q.soal.length;
   const dijawab = Object.keys(q.answers).length;
   const last = q.idx === n - 1;
+
+  // Question Image Display with resilient fallback
+  const imgHtml = s.gambar_id
+    ? '<div class="quiz-img-box"><img src="https://lh3.googleusercontent.com/d/' + encodeURIComponent(s.gambar_id) + '" onerror="this.src=\'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(s.gambar_id) + '\'" alt="Gambar Soal ' + (q.idx + 1) + '" loading="lazy"></div>'
+    : (s.gambar_url ? '<div class="quiz-img-box"><img src="' + esc(s.gambar_url) + '" alt="Gambar Soal ' + (q.idx + 1) + '" loading="lazy"></div>' : '');
+
+  // Grid Navigation Numbers
+  const navGrid = '<div class="quiz-nav-grid">'
+    + q.soal.map((item, i) => {
+      const isAnswered = q.answers[item.id] !== undefined;
+      const isCurrent = q.idx === i;
+      const cls = ['quiz-nav-num', isAnswered ? 'answered' : '', isCurrent ? 'current' : ''].filter(Boolean).join(' ');
+      return '<button type="button" class="' + cls + '" data-act="quiz-go" data-idx="' + i + '">' + (i + 1) + '</button>';
+    }).join('')
+    + '</div>';
+
   return '<div class="quiz-top"><div class="row"><b>' + esc(q.judul) + '</b><span class="timer-pill" id="timer">--:--</span></div>'
     + '<div class="progress"><div style="width:' + Math.round(dijawab / n * 100) + '%"></div></div>'
-    + '<div class="muted">Soal ' + (q.idx + 1) + ' dari ' + n + ' · sudah dijawab ' + dijawab + '</div></div>'
-    + '<div class="card qcard mt"><div class="t-md">' + esc(s.pertanyaan) + '</div>'
-    + ['A', 'B', 'C', 'D'].map(k => '<button type="button" class="quiz-opt ' + (q.answers[s.id] === k ? 'on' : '') + '" data-act="quiz-pick" data-q="' + s.id + '" data-v="' + k + '"><span class="letter">' + k + '</span><span>' + esc(s['opsi_' + k.toLowerCase()]) + '</span></button>').join('')
+    + '<div class="row mt8"><span class="muted">Soal ' + (q.idx + 1) + ' dari ' + n + ' · sudah dijawab ' + dijawab + '</span>'
+    + '<button type="button" class="btn ghost sm" data-act="toggle-qnav">' + ic('grid_view') + ' Nomor Soal</button></div>'
+    + '<div id="quiz-nav-drawer" style="margin-top:8px;">' + navGrid + '</div>'
     + '</div>'
-    + '<div class="row mt">' + (q.idx > 0 ? '<button type="button" class="btn sec" data-act="quiz-go" data-idx="' + (q.idx - 1) + '">' + ic('arrow_back') + ' Sebelumnya</button>' : '<span></span>')
+    + '<div class="card qcard mt">'
+    + '<div class="t-md">' + (q.idx + 1) + '. ' + esc(s.pertanyaan) + '</div>'
+    + imgHtml
+    + ['A', 'B', 'C', 'D', 'E'].filter(k => s['opsi_' + k.toLowerCase()]).map(k =>
+      '<button type="button" class="quiz-opt ' + (q.answers[s.id] === k ? 'on' : '') + '" data-act="quiz-pick" data-q="' + s.id + '" data-v="' + k + '">'
+      + '<span class="letter">' + k + '</span><span>' + esc(s['opsi_' + k.toLowerCase()]) + '</span></button>'
+    ).join('')
+    + '</div>'
+    + '<div class="row mt">'
+    + (q.idx > 0 ? '<button type="button" class="btn sec" data-act="quiz-go" data-idx="' + (q.idx - 1) + '">' + ic('arrow_back') + ' Sebelumnya</button>' : '<span></span>')
     + (last ? '<button type="button" class="btn" data-act="quiz-finish">' + ic('check') + ' Kumpulkan</button>'
-      : '<button type="button" class="btn" data-act="quiz-go" data-idx="' + (q.idx + 1) + '">Berikutnya ' + ic('arrow_forward') + '</button>') + '</div>'
+      : '<button type="button" class="btn" data-act="quiz-go" data-idx="' + (q.idx + 1) + '">Berikutnya ' + ic('arrow_forward') + '</button>')
+    + '</div>'
     + (last ? '' : '<div class="center mt"><button type="button" class="btn ghost" data-act="quiz-finish">Kumpulkan sekarang</button></div>');
 }
 function renderQuizBody() {
@@ -1613,17 +1768,17 @@ const actions = {
       sample = [type === 'siswa' ? 'siswa01' : 'guru01', type === 'siswa' ? 'Budi Pratama' : 'Ibu Siti', type === 'siswa' ? 'siswa123' : 'guru123'];
       filename = 'Template_Data_' + (type === 'siswa' ? 'Siswa' : 'Guru') + '.xlsx';
     } else if (type === 'soal') {
-      headers = ['Mapel', 'Soal', 'Gambar_ID', 'A', 'B', 'C', 'D', 'E', 'Kunci', 'Pembahasan'];
-      sample = ['Matematika', 'Hasil dari 5 x 5 adalah...', '', '10', '15', '20', '25', '30', 'D', 'Perkalian dasar: 5 x 5 = 25'];
-      filename = 'Template_Bank_Soal.xlsx';
+      headers = ['Nomor', 'Mapel', 'Kelas', 'Bab', 'Jenis_Soal', 'Pertanyaan', 'A', 'B', 'C', 'D', 'E', 'Kunci', 'Bobot', 'Pembahasan', 'Tingkat_Kesulitan', 'Gambar_ID'];
+      sample = ['1', 'Matematika', 'Kelas 4', 'Pecahan', 'Pilihan Ganda', 'Pecahan yang senilai dengan 1/2 adalah...', '2/4', '1/3', '2/3', '3/4', '', 'A', '1', '1/2 dikalikan 2/2 = 2/4', 'Mudah', ''];
+      filename = 'Template_Bank_Soal_EDUCERIA.xlsx';
     } else { toast('Jenis template tidak dikenali.'); return; }
     try {
       const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
       ws['!cols'] = headers.map(h => ({ wch: Math.max(14, h.length + 4) }));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+      XLSX.utils.book_append_sheet(wb, ws, 'Template Soal');
       XLSX.writeFile(wb, filename);
-      toast('Template Excel berhasil diunduh. Isi baris berikutnya dan jangan ubah nama kolom.');
+      toast('Template Excel berhasil diunduh. Gambar soal dapat diunggah melalui tombol Gambar atau Editor Soal.');
     } catch (err) { toast('Gagal mengunduh template Excel. Coba muat ulang halaman.'); }
   },
 
@@ -1676,7 +1831,38 @@ const actions = {
   }),
   'grade-open': el => gradeForm(Number(el.dataset.i)),
 
-  'quiz-pick': el => { state.quiz.answers[el.dataset.q] = el.dataset.v; renderQuizBody(); },
+  // KUIS & BANK SOAL NAVIGATION & ACTIONS
+  'kuis-tab': el => {
+    state.kuisTab = el.dataset.tab;
+    render();
+  },
+  'bank-filter-mapel': el => {
+    state.bankFilterMapel = el.dataset.mapel;
+    render();
+  },
+  'bank-search-input': () => {},
+  'toggle-qnav': () => {
+    const d = $('#quiz-nav-drawer');
+    if (d) d.classList.toggle('hidden');
+  },
+  'bank-soal-new': () => bankSoalForm(null),
+  'bank-soal-edit': el => bankSoalForm(el.dataset.id),
+  'bank-soal-del': el => confirmBox('Hapus soal ini dari Bank Soal?', async () => {
+    await api('bankSoalDelete', { id: el.dataset.id });
+    toast('Soal dihapus dari Bank Soal');
+    render();
+  }),
+
+  'quiz-pick': async el => {
+    state.quiz.answers[el.dataset.q] = el.dataset.v;
+    renderQuizBody();
+    // Silent autosave draft ke server
+    try {
+      await api('quizSaveDraft', { id: state.quiz.id, answers: state.quiz.answers });
+    } catch (e) {
+      // background autosave - silent
+    }
+  },
   'quiz-go': el => { state.quiz.idx = Number(el.dataset.idx); renderQuizBody(); },
   'quiz-finish': () => finishQuiz(false),
 
@@ -1758,8 +1944,50 @@ document.addEventListener('change', async e => {
       status.innerHTML = '<p class="err">' + esc(err.message || 'Gagal mengunggah gambar.') + '</p>'; toast(err.message || 'Gagal mengunggah gambar.');
     } finally { input.disabled = false; }
   }
+  if (e.target.matches('[data-act="pick-single-soal-img"]')) {
+    const input = e.target, file = input.files && input.files[0];
+    if (!file) return;
+    if (!/^image\/(jpeg|png)$/.test(file.type)) { toast('Pilih gambar JPG atau PNG.'); input.value = ''; return; }
+    if (file.size > 2 * 1024 * 1024) { toast('Ukuran gambar maksimal 2 MB.'); input.value = ''; return; }
+    const pv = $('#form-soal-img-pv');
+    const hiddenId = $('#form-soal-gambar-id');
+    if (!pv || !hiddenId) return;
+    const localUrl = URL.createObjectURL(file);
+    pv.innerHTML = '<div class="quiz-img-box mt8"><img src="' + localUrl + '" alt="Pratinjau"><p class="help">Mengunggah ke server...</p></div>';
+    input.disabled = true;
+    try {
+      const compressed = await compressImage(file);
+      const result = await api('uploadGambarSoal', { file: { mime: compressed.mime, data: compressed.data } });
+      hiddenId.value = result.fileId || '';
+      pv.innerHTML = '<div class="quiz-img-box mt8"><img src="' + localUrl + '" alt="Gambar Soal">'
+        + '<button type="button" class="btn ghost sm" data-act="del-soal-img" style="color:var(--bad-main);">' + ic('delete') + ' Hapus Gambar</button></div>'
+        + '<p class="help">Gambar berhasil disimpan secara permanen.</p>';
+      toast('Gambar soal berhasil diunggah.');
+    } catch (err) {
+      pv.innerHTML = '<p class="err">' + esc(err.message || 'Gagal mengunggah gambar.') + '</p>';
+      toast(err.message || 'Gagal mengunggah gambar.');
+    } finally {
+      input.disabled = false;
+    }
+  }
 });
-$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('input', e => {
+  if (e.target.matches('[data-act="bank-search-input"]')) {
+    state.bankSearch = e.target.value;
+    render();
+  }
+});
+$('#modal').addEventListener('click', e => {
+  if (e.target.closest('[data-act="del-soal-img"]')) {
+    const hidden = $('#form-soal-gambar-id');
+    if (hidden) hidden.value = '';
+    const pv = $('#form-soal-img-pv');
+    if (pv) pv.innerHTML = '<div class="help mt8">Gambar dihapus.</div>';
+    toast('Gambar dihapus dari form.');
+    return;
+  }
+  if (e.target.id === 'modal') closeModal();
+});
 
 /* ===================== FORMULIR (data-form) ===================== */
 const forms = {
@@ -1898,6 +2126,30 @@ const forms = {
     toast('Kuis disimpan');
     render();
   },
+  'bank-soal-save': async f => {
+    const d = fd(f);
+    await api('bankSoalSave', {
+      id: d.id || '',
+      mapel: d.mapel || 'Umum',
+      kelas: d.kelas || '',
+      bab: d.bab || '',
+      jenis_soal: d.jenis_soal || 'pg',
+      pertanyaan: d.pertanyaan,
+      gambar_id: d.gambar_id || '',
+      opsi_a: d.opsi_a,
+      opsi_b: d.opsi_b,
+      opsi_c: d.opsi_c,
+      opsi_d: d.opsi_d,
+      opsi_e: d.opsi_e || '',
+      jawaban_benar: (d.jawaban_benar || 'A').toUpperCase(),
+      bobot: Number(d.bobot) || 1,
+      pembahasan: d.pembahasan || '',
+      tingkat_kesulitan: d.tingkat_kesulitan || 'Sedang'
+    });
+    closeModal();
+    toast('Soal berhasil disimpan ke Bank Soal');
+    render();
+  },
   'ann-save': async f => {
     const d = fd(f);
     await api('annSave', { judul: d.judul, isi: d.isi, kelas_id: d.kelas_id || '' });
@@ -2007,8 +2259,55 @@ async function kuisForm(kelasId) {
     + '<div class="mt"><div class="row-g"><b>Pilih soal dari Bank Soal</b><span class="muted">' + bank.length + ' soal tersedia</span></div><div class="muted mt8">Centang soal yang ingin dimasukkan ke paket ujian.</div>' + bankHtml + '</div>'
     + '<details class="mt"><summary>Tambah soal manual (opsional)</summary><div id="qlist"></div><button type="button" class="btn sec block mt" data-act="add-q">' + ic('add') + ' Tambah Soal Manual</button></details>'
     + '<div class="err"></div><button type="submit" class="btn block mt">Simpan Paket Ujian</button></form>');
-}
+async function bankSoalForm(id) {
+  let q = {
+    id: '', mapel: 'Matematika', kelas: 'Kelas 4', bab: '', jenis_soal: 'pg',
+    pertanyaan: '', gambar_id: '', opsi_a: '', opsi_b: '', opsi_c: '', opsi_d: '', opsi_e: '',
+    jawaban_benar: 'A', bobot: 1, pembahasan: '', tingkat_kesulitan: 'Sedang'
+  };
+  if (id) {
+    const bank = await api('bankSoalList');
+    const found = bank.find(x => x.id === id);
+    if (found) q = Object.assign({}, q, found);
+  }
 
+  const imagePreview = q.gambar_id
+    ? '<div class="quiz-img-box mt8"><img src="https://lh3.googleusercontent.com/d/' + encodeURIComponent(q.gambar_id) + '" onerror="this.src=\'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(q.gambar_id) + '\'" alt="Gambar Soal"><button type="button" class="btn ghost sm" data-act="del-soal-img" style="color:var(--bad-main);">' + ic('delete') + ' Hapus Gambar</button></div>'
+    : '<div class="help mt8">Belum ada gambar terpilih.</div>';
+
+  openModal('<h3 class="modal-t">' + (id ? 'Edit' : 'Tambah') + ' Soal Bank Soal</h3><form data-form="bank-soal-save">'
+    + '<input type="hidden" name="id" value="' + esc(q.id || '') + '">'
+    + '<div class="dg dg-2">'
+    + '<div><label>Mata Pelajaran</label><input name="mapel" required value="' + esc(q.mapel) + '" placeholder="Contoh: Matematika"></div>'
+    + '<div><label>Kelas</label><input name="kelas" value="' + esc(q.kelas) + '" placeholder="Contoh: Kelas 4"></div>'
+    + '</div>'
+    + '<div class="dg dg-2">'
+    + '<div><label>Bab / Materi</label><input name="bab" value="' + esc(q.bab) + '" placeholder="Contoh: Pecahan Senilai"></div>'
+    + '<div><label>Tingkat Kesulitan</label><select name="tingkat_kesulitan">'
+    + ['Mudah', 'Sedang', 'Sulit'].map(k => '<option value="' + k + '" ' + (q.tingkat_kesulitan === k ? 'selected' : '') + '>' + k + '</option>').join('') + '</select></div>'
+    + '</div>'
+    + '<label>Pertanyaan Soal</label><textarea name="pertanyaan" required placeholder="Tuliskan teks pertanyaan soal di sini...">' + esc(q.pertanyaan) + '</textarea>'
+    + '<div class="card mt" style="background:var(--primary-soft);border:1px dashed #BFDBFE;">'
+    + '<b>Gambar Soal (opsional)</b><p class="help">Unggah file foto / gambar langsung dari HP atau komputer (JPG/PNG, maks 2 MB).</p>'
+    + '<label class="upload-btn">' + ic('photo_camera') + ' Pilih Gambar Soal<input type="file" accept="image/jpeg,image/png" hidden data-act="pick-single-soal-img"></label>'
+    + '<input type="hidden" name="gambar_id" id="form-soal-gambar-id" value="' + esc(q.gambar_id || '') + '">'
+    + '<div id="form-soal-img-pv">' + imagePreview + '</div>'
+    + '</div>'
+    + '<div class="dg dg-2">'
+    + '<div><label>Pilihan A</label><input name="opsi_a" required value="' + esc(q.opsi_a) + '"></div>'
+    + '<div><label>Pilihan B</label><input name="opsi_b" required value="' + esc(q.opsi_b) + '"></div>'
+    + '<div><label>Pilihan C</label><input name="opsi_c" required value="' + esc(q.opsi_c) + '"></div>'
+    + '<div><label>Pilihan D</label><input name="opsi_d" required value="' + esc(q.opsi_d) + '"></div>'
+    + '</div>'
+    + '<label>Pilihan E (opsional untuk SMA/sederajat)</label><input name="opsi_e" value="' + esc(q.opsi_e) + '">'
+    + '<div class="dg dg-2">'
+    + '<div><label>Kunci Jawaban</label><select name="jawaban_benar">'
+    + ['A', 'B', 'C', 'D', 'E'].map(k => '<option value="' + k + '" ' + (String(q.jawaban_benar || 'A').toUpperCase() === k ? 'selected' : '') + '>' + k + '</option>').join('') + '</select></div>'
+    + '<div><label>Bobot Nilai</label><input name="bobot" type="number" min="1" max="100" value="' + (q.bobot || 1) + '"></div>'
+    + '</div>'
+    + '<label>Pembahasan / Penjelasan Jawaban (opsional)</label><textarea name="pembahasan" placeholder="Penjelasan cara penyelesaian atau sumber materi...">' + esc(q.pembahasan) + '</textarea>'
+    + '<div class="err"></div><button type="submit" class="btn block mt">' + (id ? 'Perbarui Soal' : 'Simpan Soal') + '</button></form>');
+}
 function addQBlock() {
   const box = $('#qlist');
   if (!box) return;

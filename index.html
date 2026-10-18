@@ -423,6 +423,41 @@ input,select,textarea{border-radius:14px;min-height:48px;font-size:.98rem}
 .view-loading{opacity:.6;pointer-events:none;transition:opacity .15s ease}
 .spin{animation:spin 1s linear infinite;display:inline-block}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+/* Submenu Kuis Tab Bar */
+.subnav-wrap{display:flex;gap:8px;background:#fff;padding:6px;border:1px solid var(--line);border-radius:16px;margin-bottom:20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.subnav-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:0;border-radius:12px;background:transparent;color:var(--t2);font:inherit;font-weight:700;font-size:.95rem;cursor:pointer;white-space:nowrap;transition:all .15s}
+.subnav-btn:hover{background:var(--primary-soft);color:var(--accent)}
+.subnav-btn.active{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.2)}
+.subnav-btn .badge-pill{padding:2px 8px;border-radius:999px;font-size:.78rem;background:rgba(255,255,255,.25);color:inherit}
+.subnav-btn:not(.active) .badge-pill{background:#E2E8F0;color:var(--t2)}
+
+/* Bank Soal Card & Grid */
+.bank-item{background:#fff;border:1px solid var(--line);border-radius:var(--rl);padding:20px;margin-bottom:14px;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+.bank-item:hover{border-color:#BFDBFE;box-shadow:0 8px 24px rgba(37,99,235,.1)}
+.bank-header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.bank-opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:12px}
+.bank-opt-item{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-radius:10px;background:#F8FAFC;border:1px solid #E2E8F0;font-size:.95rem}
+.bank-opt-item.correct{background:#DCFCE7;border-color:#86EFAC;color:#166534;font-weight:700}
+.bank-opt-letter{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#E2E8F0;color:#334155;font-size:.8rem;font-weight:800;flex:none}
+.bank-opt-item.correct .bank-opt-letter{background:#16A34A;color:#fff}
+
+/* Question Image Box */
+.quiz-img-box{margin:14px 0;text-align:center;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:12px;overflow:hidden}
+.quiz-img-box img{max-width:100%;max-height:360px;object-fit:contain;border-radius:10px;display:inline-block}
+
+/* Student Exam Navigation Grid */
+.quiz-nav-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:8px;margin:14px 0;max-height:160px;overflow-y:auto;padding:4px}
+.quiz-nav-num{min-height:42px;border:1.5px solid #CBD5E1;border-radius:10px;background:#fff;font:inherit;font-weight:800;font-size:.95rem;color:#475569;display:grid;place-items:center;cursor:pointer;transition:all .15s}
+.quiz-nav-num:hover{border-color:var(--accent);color:var(--accent)}
+.quiz-nav-num.answered{background:#22C55E;color:#fff;border-color:#16A34A}
+.quiz-nav-num.current{border-color:#2563EB;box-shadow:0 0 0 3px #BFDBFE}
+.quiz-nav-num.answered.current{box-shadow:0 0 0 3px #86EFAC}
+
+/* Review Mode */
+.review-card{border-left:5px solid #CBD5E1}
+.review-card.correct{border-left-color:#22C55E}
+.review-card.incorrect{border-left-color:#EF4444}
   </style>
 </head>
 <body>

@@ -1404,5 +1404,53 @@ const HANDLERS = {
     // Gambar soal harus dapat dibaca dari perangkat siswa saat mengerjakan kuis.
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return { fileId: file.getId(), imageUrl: 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(file.getId()) };
+  },
+
+  // Simpan / update 1 soal Bank Soal secara individual dari modal editor
+  bankSoalSave: (u, p) => {
+    need(u, ['guru', 'admin']);
+    const id = p.id || uid();
+    const exists = table('Bank_Soal').rows.some(x => String(x.id) === String(id));
+    const obj = {
+      id: id,
+      mapel: String(p.mapel || 'Umum').trim() || 'Umum',
+      kelas: String(p.kelas || '').trim(),
+      bab: String(p.bab || '').trim(),
+      jenis_soal: String(p.jenis_soal || 'pg').trim(),
+      pertanyaan: String(p.pertanyaan || '').trim(),
+      gambar_id: String(p.gambar_id || '').trim(),
+      opsi_a: String(p.opsi_a || '').trim(),
+      opsi_b: String(p.opsi_b || '').trim(),
+      opsi_c: String(p.opsi_c || '').trim(),
+      opsi_d: String(p.opsi_d || '').trim(),
+      opsi_e: String(p.opsi_e || '').trim(),
+      jawaban_benar: String(p.jawaban_benar || 'A').trim().toUpperCase(),
+      bobot: Number(p.bobot) || 1,
+      pembahasan: String(p.pembahasan || '').trim(),
+      tingkat_kesulitan: String(p.tingkat_kesulitan || 'Sedang').trim(),
+      dibuat_oleh: exists ? (table('Bank_Soal').rows.find(x => String(x.id) === String(id)) || {}).dibuat_oleh || u.id : u.id,
+      dibuat_pada: exists ? (table('Bank_Soal').rows.find(x => String(x.id) === String(id)) || {}).dibuat_pada || nowIso() : nowIso()
+    };
+    if (!obj.pertanyaan) throw new Error('Pertanyaan soal wajib diisi.');
+    upsert('Bank_Soal', obj);
+    return obj;
+  },
+
+  // Hapus 1 soal dari Bank Soal
+  bankSoalDelete: (u, p) => {
+    need(u, ['guru', 'admin']);
+    if (!p.id) throw new Error('ID soal tidak valid.');
+    removeWhere('Bank_Soal', x => String(x.id) === String(p.id) && (u.role === 'admin' || x.dibuat_oleh === u.id));
+    return true;
+  },
+
+  // Simpan draf berkala jawaban siswa saat ujian berlangsung (Autosave)
+  quizSaveDraft: (u, p) => {
+    need(u, ['siswa']);
+    const j = table('Jawaban_Kuis').rows.find(x => x.kuis_id === p.id && x.siswa_id === u.id);
+    if (j && j.status === 'Dimulai') {
+      upsert('Jawaban_Kuis', { id: j.id, draft_jawaban: JSON.stringify(p.answers || {}) });
+    }
+    return true;
   }
 };
