@@ -1755,7 +1755,7 @@ async function render() {
       startClock();
     }
     prefetchAppData();
-    if (a === 'materi' && b === 'view') loadMateriFile();
+    if (a === 'materi' && (!b || b === 'view')) loadMateriFile();
     if (a === 'kuis' && c === 'kerjakan' && state.quiz) startQuizTimer();
   } catch (e) {
     if (seq !== renderSeq) return;
@@ -2725,20 +2725,195 @@ function materiGroups(list, guru) {
     + g.items.map((m, i) => materiCard(m, guru, i, g.items.length)).join('') + '</section>').join('');
 }
 
-/* ----- Halaman daftar materi ----- */
+/* ----- Halaman daftar materi (Smart Dashboard Style sesuai referensi) ----- */
 async function pageMateriList(kelasId) {
   const u = state.user;
-  const guru = u.role === 'guru';
+  const guru = u.role === 'guru' || u.role === 'admin';
   const kelas = await api('classList');
   if (!kelas.length) return pageHead('Materi') + empty('Belum ada kelas.');
-  const aktif = kelas.find(k => k.id === kelasId) || kelas[0];
-  const list = await api('materialList', { classId: aktif.id });
-  const jumlahBab = new Set(list.map(m => m.bab)).size;
-  const jumlahBerkas = list.filter(m => m.jenis === 'upload').length;
-  return pageHead('Materi', guru ? '<button type="button" class="btn" data-act="mat-new" data-kelas="' + aktif.id + '">' + ic('add') + ' Tambah Materi</button>' : '')
-    + '<div class="chips kelas-chips">' + kelas.map(k => '<button type="button" class="chip ' + (k.id === aktif.id ? 'on' : '') + '" data-act="go" data-to="#/materi/' + k.id + '">' + esc(k.nama_kelas) + '</button>').join('') + '</div>'
-    + '<div class="mstat"><div><b>' + list.length + '</b><span>materi</span></div><div><b>' + jumlahBab + '</b><span>bab</span></div><div><b>' + jumlahBerkas + '</b><span>berkas</span></div></div>'
-    + materiGroups(list, guru);
+
+  // Jika parameter rute kelasId ada, simpan ke filter
+  if (kelasId) state.materiFilterKelas = kelasId;
+  const filterKelas = state.materiFilterKelas || '';
+
+  // Ambil data materi: dari kelas tertentu atau seluruh kelas yang diampu
+  let rawList = [];
+  if (filterKelas) {
+    const k = kelas.find(x => x.id === filterKelas) || kelas[0];
+    const res = await api('materialList', { classId: k.id });
+    rawList = res.map(m => Object.assign({ kelas_nama: k.nama_kelas }, m));
+  } else {
+    const all = await Promise.all(
+      kelas.map(k => api('materialList', { classId: k.id })
+        .then(res => res.map(m => Object.assign({ kelas_nama: k.nama_kelas }, m)))
+        .catch(() => []))
+    );
+    rawList = all.flat();
+  }
+
+  // Hitung metrik 4 kartu ringkasan
+  const totalMateri = rawList.length;
+  const totalYoutube = rawList.filter(m => m.jenis === 'youtube').length;
+  const totalDokumen = rawList.filter(m => m.jenis === 'upload').length;
+  const totalTautan = rawList.filter(m => m.jenis === 'drive' || m.jenis === 'tautan').length;
+
+  // Banner atas dengan tombol "+ Tambah Materi"
+  const aktifKId = filterKelas || (kelas[0] ? kelas[0].id : '');
+  const banner = '<section class="mat-banner">'
+    + '<div class="mat-banner-left">'
+    + '<div class="mat-banner-ico">' + ic('menu_book') + '</div>'
+    + '<div><h2 class="mat-banner-title">Materi Pembelajaran</h2>'
+    + '<p class="mat-banner-sub">Kelola dan bagikan materi pembelajaran dengan mudah. Anda dapat menambahkan materi dalam berbagai format seperti video, dokumen, tautan, dan file dari perangkat.</p></div>'
+    + '</div>'
+    + (guru ? '<button type="button" class="btn mat-btn-add" data-act="mat-new" data-kelas="' + esc(aktifKId) + '">' + ic('add') + ' Tambah Materi</button>' : '')
+    + '</section>';
+
+  // 4 Kartu Statistik Metrik
+  const stats = '<div class="mat-stats">'
+    + '<div class="mat-stat-tile"><div class="mat-stat-ico c-blue">' + ic('smart_display') + '</div><div><div class="mat-stat-num">' + totalMateri + '</div><div class="mat-stat-lab">Total Materi</div></div></div>'
+    + '<div class="mat-stat-tile"><div class="mat-stat-ico c-red">' + ic('ondemand_video') + '</div><div><div class="mat-stat-num">' + totalYoutube + '</div><div class="mat-stat-lab">Video YouTube</div></div></div>'
+    + '<div class="mat-stat-tile"><div class="mat-stat-ico c-green">' + ic('description') + '</div><div><div class="mat-stat-num">' + totalDokumen + '</div><div class="mat-stat-lab">Dokumen</div></div></div>'
+    + '<div class="mat-stat-tile"><div class="mat-stat-ico c-purple">' + ic('link') + '</div><div><div class="mat-stat-num">' + totalTautan + '</div><div class="mat-stat-lab">Tautan</div></div></div>'
+    + '</div>';
+
+  // Opsi filter bab / mapel
+  const allBabs = [...new Set(rawList.map(m => m.bab).filter(Boolean))];
+  const filterBab = state.materiFilterMapel || '';
+  const searchQ = (state.materiSearch || '').toLowerCase().trim();
+  const sortMode = state.materiSort || 'terbaru';
+
+  // Filter dan sorting materi
+  let list = rawList.filter(m => {
+    const matchBab = !filterBab || m.bab === filterBab;
+    const matchSearch = !searchQ || String(m.judul || '').toLowerCase().includes(searchQ) || String(m.deskripsi || '').toLowerCase().includes(searchQ);
+    return matchBab && matchSearch;
+  });
+
+  if (sortMode === 'terbaru') {
+    list.sort((a, b) => String(b.dibuat_pada || '').localeCompare(String(a.dibuat_pada || '')));
+  } else if (sortMode === 'terlama') {
+    list.sort((a, b) => String(a.dibuat_pada || '').localeCompare(String(b.dibuat_pada || '')));
+  } else if (sortMode === 'judul') {
+    list.sort((a, b) => String(a.judul || '').localeCompare(String(b.judul || '')));
+  }
+
+  // Materi aktif yang sedang dipratinjau
+  let cur = (state.activeMateriPreview && rawList.find(m => m.id === state.activeMateriPreview)) || list[0] || rawList[0] || null;
+
+  // Filter toolbar
+  const filterBar = '<div class="mat-filter-bar">'
+    + '<div class="mat-search-wrap">' + ic('search') + '<input type="search" placeholder="Cari judul materi..." value="' + esc(state.materiSearch || '') + '" data-act="mat-search-input"></div>'
+    + '<select class="mat-select" data-act="mat-filter-kelas">'
+    + '<option value="">Semua Kelas</option>'
+    + kelas.map(k => '<option value="' + k.id + '" ' + (filterKelas === k.id ? 'selected' : '') + '>' + esc(k.nama_kelas) + '</option>').join('')
+    + '</select>'
+    + '<select class="mat-select" data-act="mat-filter-mapel">'
+    + '<option value="">Semua Mapel</option>'
+    + allBabs.map(b => '<option value="' + esc(b) + '" ' + (filterBab === b ? 'selected' : '') + '>' + esc(b) + '</option>').join('')
+    + '</select>'
+    + '<select class="mat-select" data-act="mat-filter-sort">'
+    + '<option value="terbaru" ' + (sortMode === 'terbaru' ? 'selected' : '') + '>Terbaru</option>'
+    + '<option value="terlama" ' + (sortMode === 'terlama' ? 'selected' : '') + '>Terlama</option>'
+    + '<option value="judul" ' + (sortMode === 'judul' ? 'selected' : '') + '>Judul A-Z</option>'
+    + '</select>'
+    + '</div>';
+
+  // Daftar item materi (kolom kiri)
+  const itemsHtml = list.length ? list.map(m => {
+    const isAct = cur && cur.id === m.id;
+    let thumbHtml = '';
+    if (m.jenis === 'youtube') {
+      const yid = youtubeId(m.tautan);
+      thumbHtml = yid
+        ? '<div class="mat-card-thumb"><img src="https://img.youtube.com/vi/' + yid + '/mqdefault.jpg" alt="Video" loading="lazy"><span class="mat-thumb-play">' + ic('play_arrow') + '</span></div>'
+        : '<div class="mat-card-thumb"><div class="mat-thumb-emblem emblem-pdf">' + ic('smart_display') + '<b>Video</b></div></div>';
+    } else if (m.jenis === 'upload') {
+      const ext = (m.nama_file ? m.nama_file.split('.').pop() : 'PDF').toUpperCase();
+      thumbHtml = '<div class="mat-card-thumb"><div class="mat-thumb-emblem emblem-file">' + ic('description') + '<b>' + esc(ext) + '</b></div></div>';
+    } else if (m.jenis === 'drive') {
+      thumbHtml = '<div class="mat-card-thumb"><div class="mat-thumb-emblem emblem-drive">' + ic('add_to_drive') + '<b>Drive</b></div></div>';
+    } else {
+      thumbHtml = '<div class="mat-card-thumb"><div class="mat-thumb-emblem emblem-link">' + ic('link') + '<b>Tautan</b></div></div>';
+    }
+
+    const typeBadge = m.jenis === 'youtube'
+      ? '<span class="badge b-bad">' + ic('smart_display') + ' Video YouTube</span>'
+      : (m.jenis === 'upload'
+        ? '<span class="badge b-ok">' + ic('description') + ' Dokumen ' + esc((m.nama_file ? m.nama_file.split('.').pop() : 'PDF').toUpperCase()) + '</span>'
+        : '<span class="badge b-info">' + ic('cloud') + ' Tautan Drive</span>');
+
+    return '<div class="mat-card ' + (isAct ? 'active-preview' : '') + '">'
+      + thumbHtml
+      + '<div class="mat-card-content">'
+      + '<div class="mat-card-title">' + esc(m.judul) + '</div>'
+      + '<div class="mat-card-badges">' + typeBadge + '<span class="badge b-info">' + esc(m.bab || 'Umum') + '</span>' + (m.kelas_nama ? '<span class="badge b-ok">' + esc(m.kelas_nama) + '</span>' : '') + '</div>'
+      + '<div class="mat-card-meta">' + ic('schedule') + ' ' + fmt(m.dibuat_pada) + (m.nama_file ? ' · ' + esc(m.nama_file) : '') + '</div>'
+      + '</div>'
+      + '<div class="mat-card-actions">'
+      + '<button type="button" class="mat-btn-view" data-act="mat-preview" data-id="' + m.id + '">' + ic('visibility') + ' Lihat</button>'
+      + (guru ? '<div class="mat-menu-wrap"><button type="button" class="mat-menu-btn" data-act="mat-pop-toggle" data-id="' + m.id + '" title="Opsi">' + ic('more_vert') + '</button>'
+        + '<div class="mat-popover" id="mat-pop-' + m.id + '">'
+        + '<button type="button" data-act="mat-edit" data-kelas="' + m.kelas_id + '" data-id="' + m.id + '">' + ic('edit') + ' Ubah</button>'
+        + '<button type="button" data-act="mat-up" data-kelas="' + m.kelas_id + '" data-id="' + m.id + '">' + ic('arrow_upward') + ' Geser Naik</button>'
+        + '<button type="button" data-act="mat-down" data-kelas="' + m.kelas_id + '" data-id="' + m.id + '">' + ic('arrow_downward') + ' Geser Turun</button>'
+        + '<button type="button" class="del" data-act="mat-del" data-kelas="' + m.kelas_id + '" data-id="' + m.id + '">' + ic('delete') + ' Hapus</button>'
+        + '</div></div>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('') : empty('Tidak ada materi yang cocok.');
+
+  const leftCol = '<div class="mat-left">'
+    + '<div class="mat-col-header"><h3>Daftar Materi</h3></div>'
+    + filterBar
+    + '<div class="mat-list">' + itemsHtml + '</div>'
+    + '</div>';
+
+  // Preview Card (Kolom Kanan)
+  let rightPreview = '';
+  if (cur) {
+    let playerHtml = '';
+    if (cur.jenis === 'youtube') {
+      playerHtml = '<div class="mat-player-box"><iframe src="https://www.youtube-nocookie.com/embed/' + youtubeId(cur.tautan) + '" title="' + esc(cur.judul) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>';
+    } else if (cur.jenis === 'drive') {
+      playerHtml = '<div class="mat-player-box"><iframe src="' + esc(embedUrl(cur)) + '" title="' + esc(cur.judul) + '" allowfullscreen loading="lazy"></iframe></div>';
+    } else if (cur.jenis === 'upload') {
+      playerHtml = '<div class="mat-player-box" id="fileBox" data-id="' + cur.id + '"><div class="pmsg" style="padding:40px 20px;text-align:center;color:#94A3B8;">' + ic('hourglass_top') + ' Memuat berkas…</div></div>';
+    } else {
+      playerHtml = '<div class="mat-player-box mat-player-link"><div class="ext-card">' + ic('link') + '<div><div class="t-md">' + esc(cur.judul) + '</div><div class="muted">' + esc(cur.tautan) + '</div></div></div></div>';
+    }
+
+    const curTypeBadge = cur.jenis === 'youtube' ? 'b-bad' : (cur.jenis === 'upload' ? 'b-ok' : 'b-info');
+    const curTypeLabel = cur.jenis === 'youtube' ? 'Video YouTube' : (cur.jenis === 'upload' ? 'Dokumen' : 'Tautan Drive');
+
+    rightPreview = '<div class="mat-preview-card">'
+      + '<div class="mat-preview-head"><h4>Preview Materi</h4><span class="badge ' + curTypeBadge + '">' + curTypeLabel + '</span></div>'
+      + playerHtml
+      + '<div class="mat-preview-title">' + esc(cur.judul) + '</div>'
+      + '<div class="row-g"><span class="badge b-info">' + esc(cur.bab || 'Umum') + '</span>' + (cur.kelas_nama ? '<span class="badge b-ok">' + esc(cur.kelas_nama) + '</span>' : '') + '</div>'
+      + '<p class="mat-preview-desc">' + esc(cur.deskripsi || 'Tidak ada deskripsi.') + '</p>'
+      + '<div class="row-g mt" style="margin-top:14px;">'
+      + (cur.jenis === 'upload' ? '<button type="button" class="btn sm" data-act="mat-download" data-id="' + cur.id + '">' + ic('download') + ' Unduh File</button>' : '<a class="btn sec sm" href="' + esc(cur.tautan) + '" target="_blank" rel="noopener">' + ic('open_in_new') + ' Buka di Tab Baru</a>')
+      + '<button type="button" class="btn sec sm" data-act="go" data-to="#/materi/view/' + cur.id + '">' + ic('fullscreen') + ' Tampilan Penuh</button>'
+      + '</div>'
+      + '</div>';
+  } else {
+    rightPreview = '<div class="mat-preview-card"><div class="mat-preview-head"><h4>Preview Materi</h4></div>' + empty('Pilih materi untuk melihat pratinjau.') + '</div>';
+  }
+
+  // Quick Upload Card (Kolom Kanan)
+  const rightUpload = '<div class="mat-upload-card">'
+    + '<h4>Upload Materi</h4>'
+    + '<div class="mat-quick-grid">'
+    + '<button type="button" class="mat-quick-tile q-yt" data-act="mat-quick-new" data-type="youtube" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-yt">' + ic('smart_display') + '</div><b>YouTube</b><small>Masukkan link video</small></button>'
+    + '<button type="button" class="mat-quick-tile q-drive" data-act="mat-quick-new" data-type="drive" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-drive">' + ic('add_to_drive') + '</div><b>Google Drive</b><small>Pilih dari Drive</small></button>'
+    + '<button type="button" class="mat-quick-tile q-file" data-act="mat-quick-new" data-type="upload" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-file">' + ic('cloud_upload') + '</div><b>Dari Perangkat</b><small>Upload file dari perangkat</small></button>'
+    + '<button type="button" class="mat-quick-tile q-link" data-act="mat-quick-new" data-type="drive" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-link">' + ic('link') + '</div><b>Tautan Website</b><small>Masukkan URL</small></button>'
+    + '</div>'
+    + '</div>';
+
+  const rightCol = '<div class="mat-right">' + rightPreview + (guru ? rightUpload : '') + '</div>';
+
+  return banner + stats + '<div class="mat-layout">' + leftCol + rightCol + '</div>';
 }
 
 /* ----- Halaman preview materi ----- */
@@ -2803,15 +2978,20 @@ async function loadMateriFile() {
 }
 
 /* ----- Formulir materi (guru) ----- */
-async function materiForm(kelasId, id) {
-  const list = await api('materialList', { classId: kelasId });
-  let m = { judul: '', deskripsi: '', bab: '', jenis: 'youtube', tautan: '', nama_file: '' };
+async function materiForm(kelasId, id, initialJenis) {
+  const kelas = await api('classList');
+  if (!kelas.length) throw new Error('Anda belum memiliki kelas.');
+  const kId = kelasId || (kelas.find(k => k.id === state.materiFilterKelas) || kelas[0]).id;
+  const list = await api('materialList', { classId: kId });
+  let m = { judul: '', deskripsi: '', bab: '', jenis: initialJenis || 'youtube', tautan: '', nama_file: '' };
   if (id) m = list.find(x => x.id === id) || m;
   const babs = [...new Set(list.map(x => x.bab).filter(b => b && b !== 'Umum'))];
+  const classOpts = kelas.map(k => '<option value="' + k.id + '" ' + (k.id === (m.kelas_id || kId) ? 'selected' : '') + '>' + esc(k.nama_kelas) + '</option>').join('');
   openModal('<h3 class="modal-t">' + (id ? 'Ubah' : 'Tambah') + ' Materi</h3>'
-    + '<form data-form="mat-save"><input type="hidden" name="id" value="' + esc(id || '') + '"><input type="hidden" name="kelas_id" value="' + esc(kelasId) + '">'
+    + '<form data-form="mat-save"><input type="hidden" name="id" value="' + esc(id || '') + '">'
+    + '<label>Kelas</label><select name="kelas_id">' + classOpts + '</select>'
     + '<label>Judul materi</label><input name="judul" required value="' + esc(m.judul) + '">'
-    + '<label>Bab / topik</label><input name="bab" list="bablist" placeholder="Contoh: Bab 1 Pecahan" value="' + esc(m.bab === 'Umum' ? '' : m.bab) + '">'
+    + '<label>Bab / topik / mata pelajaran</label><input name="bab" list="bablist" placeholder="Contoh: IPA / Bab 1 Pecahan" value="' + esc(m.bab === 'Umum' ? '' : m.bab) + '">'
     + '<datalist id="bablist">' + babs.map(b => '<option value="' + esc(b) + '">').join('') + '</datalist>'
     + '<label>Sumber materi</label><select name="jenis" data-act="src-change">'
     + ['youtube', 'drive', 'upload'].map(k => '<option value="' + k + '"' + (m.jenis === k ? ' selected' : '') + '>' + JENIS_INFO[k].label + (k === 'upload' ? ' dari perangkat' : '') + '</option>').join('')
@@ -2852,6 +3032,18 @@ async function moveMateri(el, dir) {
 Object.assign(actions, {
   'mat-up': el => moveMateri(el, 'up'),
   'mat-down': el => moveMateri(el, 'down'),
+  'mat-preview': el => {
+    state.activeMateriPreview = el.dataset.id;
+    render();
+  },
+  'mat-quick-new': el => materiForm(el.dataset.kelas || '', null, el.dataset.type),
+  'mat-pop-toggle': el => {
+    const pop = $('#mat-pop-' + el.dataset.id);
+    if (pop) {
+      document.querySelectorAll('.mat-popover.open').forEach(p => p !== pop && p.classList.remove('open'));
+      pop.classList.toggle('open');
+    }
+  },
   'mat-download': async el => {
     const r = await api('materialFile', { id: el.dataset.id });
     const a = document.createElement('a');
@@ -2895,6 +3087,31 @@ document.addEventListener('change', e => {
     const s = $('#fname');
     const f = t.files[0];
     if (s) s.textContent = f ? f.name : 'Pilih berkas';
+  }
+  if (t.matches('[data-act="mat-filter-kelas"]')) {
+    state.materiFilterKelas = t.value;
+    render();
+  }
+  if (t.matches('[data-act="mat-filter-mapel"]')) {
+    state.materiFilterMapel = t.value;
+    render();
+  }
+  if (t.matches('[data-act="mat-filter-sort"]')) {
+    state.materiSort = t.value;
+    render();
+  }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches('[data-act="mat-search-input"]')) {
+    state.materiSearch = t.value;
+    clearTimeout(state.matSearchDebounce);
+    state.matSearchDebounce = setTimeout(() => render(), 300);
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.mat-menu-wrap')) {
+    document.querySelectorAll('.mat-popover.open').forEach(p => p.classList.remove('open'));
   }
 });
 
