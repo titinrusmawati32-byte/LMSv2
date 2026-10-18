@@ -20,15 +20,15 @@ const SCHEMA = {
   Materi: ['id', 'kelas_id', 'judul', 'deskripsi', 'tautan', 'dibuat_oleh', 'dibuat_pada', 'bab', 'urutan', 'jenis', 'file_id', 'nama_file', 'mime', 'ukuran'],
   Tugas: ['id', 'kelas_id', 'judul', 'deskripsi', 'batas_waktu', 'nilai_maksimal', 'dibuat_oleh', 'dibuat_pada'],
   Pengumpulan: ['id', 'tugas_id', 'siswa_id', 'jawaban', 'tautan', 'foto_ids', 'waktu_kumpul', 'nilai', 'feedback', 'status'],
-  Kuis: ['id', 'kelas_id', 'judul', 'jenis_ujian', 'durasi_menit', 'dibuat_oleh', 'dibuat_pada'],
-  Soal: ['id', 'kuis_id', 'pertanyaan', 'gambar_id', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'jawaban_benar'],
-  Jawaban_Kuis: ['id', 'kuis_id', 'siswa_id', 'skor', 'waktu_mulai', 'waktu_selesai', 'status', 'jawaban'],
+  Kuis: ['id', 'kelas_id', 'judul', 'jenis_ujian', 'durasi_menit', 'waktu_mulai', 'waktu_selesai', 'acak_soal', 'acak_opsi', 'token_ujian', 'tampilkan_nilai', 'tampilkan_pembahasan', 'dibuat_oleh', 'dibuat_pada'],
+  Soal: ['id', 'kuis_id', 'pertanyaan', 'gambar_id', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'jawaban_benar', 'bobot', 'pembahasan'],
+  Jawaban_Kuis: ['id', 'kuis_id', 'siswa_id', 'skor', 'waktu_mulai', 'waktu_selesai', 'status', 'jawaban', 'draft_jawaban'],
   Pengumuman: ['id', 'kelas_id', 'judul', 'isi', 'dibuat_oleh', 'dibuat_pada'],
   Sesi: ['token', 'user_id', 'dibuat_pada', 'kedaluwarsa'],
   // ================= TAMBAHAN PENGEMBANGAN =================
-  Bank_Soal: ['id', 'mapel', 'pertanyaan', 'gambar_id', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'pembahasan', 'jawaban_benar', 'dibuat_oleh', 'dibuat_pada'],
-  Paket_Ujian: ['id', 'kelas_id', 'judul', 'durasi_menit', 'soal_ids', 'dibuat_oleh', 'dibuat_pada'], // soal_ids berisi string ID yang dipisah koma
-  Jawaban_Paket_Ujian: ['id', 'paket_id', 'siswa_id', 'skor', 'waktu_mulai', 'waktu_selesai', 'status', 'jawaban']
+  Bank_Soal: ['id', 'mapel', 'kelas', 'bab', 'jenis_soal', 'pertanyaan', 'gambar_id', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'jawaban_benar', 'bobot', 'pembahasan', 'tingkat_kesulitan', 'dibuat_oleh', 'dibuat_pada'],
+  Paket_Ujian: ['id', 'kelas_id', 'judul', 'jenis_ujian', 'durasi_menit', 'waktu_mulai', 'waktu_selesai', 'soal_ids', 'dibuat_oleh', 'dibuat_pada'],
+  Jawaban_Paket_Ujian: ['id', 'paket_id', 'siswa_id', 'skor', 'waktu_mulai', 'waktu_selesai', 'status', 'jawaban', 'draft_jawaban']
 };
 
 // Cache data per eksekusi agar sheet tidak dibaca berulang (menghemat kuota GAS).

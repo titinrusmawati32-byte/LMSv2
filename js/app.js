@@ -2259,6 +2259,7 @@ async function kuisForm(kelasId) {
     + '<div class="mt"><div class="row-g"><b>Pilih soal dari Bank Soal</b><span class="muted">' + bank.length + ' soal tersedia</span></div><div class="muted mt8">Centang soal yang ingin dimasukkan ke paket ujian.</div>' + bankHtml + '</div>'
     + '<details class="mt"><summary>Tambah soal manual (opsional)</summary><div id="qlist"></div><button type="button" class="btn sec block mt" data-act="add-q">' + ic('add') + ' Tambah Soal Manual</button></details>'
     + '<div class="err"></div><button type="submit" class="btn block mt">Simpan Paket Ujian</button></form>');
+}
 async function bankSoalForm(id) {
   let q = {
     id: '', mapel: 'Matematika', kelas: 'Kelas 4', bab: '', jenis_soal: 'pg',
