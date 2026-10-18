@@ -134,8 +134,8 @@ function barChart(items) {
   let g = '';
   for (let i = 0; i <= 4; i++) {
     const y = T + ph - ph * i / 4;
-    g += '<line x1="' + L + '" y1="' + y + '" x2="' + (W - R) + '" y2="' + y + '" stroke="#E2E8F0" stroke-width="1"' + (i ? ' stroke-dasharray="3 4"' : '') + '/>'
-      + '<text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64748B" font-family="Plus Jakarta Sans,Arial,sans-serif">' + Math.round(top * i / 4) + '</text>';
+    g += '<line x1="' + L + '" y1="' + y + '" x2="' + (W - R) + '" y2="' + y + '" stroke="rgba(255,255,255,0.08)" stroke-width="1"' + (i ? ' stroke-dasharray="3 4"' : '') + '/>'
+      + '<text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#94A3B8" font-family="Plus Jakarta Sans,Arial,sans-serif">' + Math.round(top * i / 4) + '</text>';
   }
   const slot = (W - L - R) / items.length;
   const bw = Math.min(54, slot * 0.55);
@@ -144,8 +144,8 @@ function barChart(items) {
     const x = L + slot * i + (slot - bw) / 2;
     const y = T + ph - h;
     return '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" rx="9" fill="' + it.c + '"/>'
-      + '<text x="' + (x + bw / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#1E3A8A" font-family="Plus Jakarta Sans,Arial,sans-serif">' + it.v + '</text>'
-      + '<text x="' + (x + bw / 2) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="12" fill="#475569" font-weight="600" font-family="Plus Jakarta Sans,Arial,sans-serif">' + esc(it.l) + '</text>';
+      + '<text x="' + (x + bw / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF" font-family="Plus Jakarta Sans,Arial,sans-serif">' + it.v + '</text>'
+      + '<text x="' + (x + bw / 2) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="12" fill="#94A3B8" font-weight="600" font-family="Plus Jakarta Sans,Arial,sans-serif">' + esc(it.l) + '</text>';
   }).join('');
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Grafik jumlah aktivitas pembelajaran">' + g + bars + '</svg>';
 }
@@ -159,9 +159,9 @@ function donutChart(items, total) {
     off += len;
     return s;
   }).join('') : '';
-  return '<svg viewBox="0 0 200 200" role="img" aria-label="Komposisi pengguna"><g transform="rotate(-90 100 100)"><circle cx="100" cy="100" r="' + r + '" fill="none" stroke="#EEF2F8" stroke-width="30"/>' + segs + '</g>'
-    + '<text x="100" y="96" text-anchor="middle" font-size="12" fill="#64748B" font-weight="600" font-family="Plus Jakarta Sans,Arial,sans-serif">Total</text>'
-    + '<text x="100" y="122" text-anchor="middle" font-size="30" fill="#1E3A8A" font-weight="800" font-family="Plus Jakarta Sans,Arial,sans-serif">' + total + '</text></svg>';
+  return '<svg viewBox="0 0 200 200" role="img" aria-label="Komposisi pengguna"><g transform="rotate(-90 100 100)"><circle cx="100" cy="100" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="30"/>' + segs + '</g>'
+    + '<text x="100" y="96" text-anchor="middle" font-size="12" fill="#94A3B8" font-weight="600" font-family="Plus Jakarta Sans,Arial,sans-serif">Total</text>'
+    + '<text x="100" y="122" text-anchor="middle" font-size="30" fill="#FFFFFF" font-weight="800" font-family="Plus Jakarta Sans,Arial,sans-serif">' + total + '</text></svg>';
 }
 
 // Optimasi dashboard admin: satu panggilan server menggantikan banyak panggilan berantai.
@@ -1211,10 +1211,10 @@ async function pageHome() {
   if (admin) {
     const us = ex.users;
     const cnt = r => us.filter(x => x.role === r).length;
-    const items = [{ l: 'Siswa', v: cnt('siswa'), c: '#3B82F6' }, { l: 'Guru', v: cnt('guru'), c: '#22C55E' }, { l: 'Admin TU', v: cnt('admin'), c: '#8B5CF6' }];
+    const items = [{ l: 'Siswa', v: cnt('siswa'), c: '#38BDF8' }, { l: 'Guru', v: cnt('guru'), c: '#10B981' }, { l: 'Admin TU', v: cnt('admin'), c: '#C084FC' }];
     const total = items.reduce((a, i) => a + i.v, 0);
     const legend = '<div class="legend">' + items.map(i => '<div class="lg"><i style="background:' + i.c + '"></i>' + i.l + '<b>' + i.v + '</b><span class="pc">' + (total ? Math.round(i.v / total * 100) : 0) + '%</span></div>').join('') + '</div>';
-    const act = [{ l: 'Kelas', v: ex.kelas, c: '#3B82F6' }, { l: 'Materi', v: ex.materi, c: '#22C55E' }, { l: 'Tugas', v: ex.tugas, c: '#8B5CF6' }, { l: 'Kuis', v: ex.kuis, c: '#F59E0B' }];
+    const act = [{ l: 'Kelas', v: ex.kelas, c: '#38BDF8' }, { l: 'Materi', v: ex.materi, c: '#10B981' }, { l: 'Tugas', v: ex.tugas, c: '#C084FC' }, { l: 'Kuis', v: ex.kuis, c: '#FF8A24' }];
     const chart = '<div class="chart-wrap">' + barChart(act) + '</div><div class="chart-note">Jumlah konten pembelajaran yang tersedia di seluruh kelas.</div>';
     const rows = us.slice(0, 5).map(x => '<tr><td><div class="uname"><span class="uav r-' + esc(x.role) + '">' + esc(initials(x.nama)) + '</span>' + esc(x.nama) + '</div></td>'
       + '<td>' + roleName(x.role) + '</td><td>' + (x.status === 'aktif' ? '<span class="badge b-ok">Aktif</span>' : '<span class="badge b-bad">Nonaktif</span>') + '</td></tr>').join('');
