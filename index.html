@@ -415,9 +415,20 @@ input,select,textarea{border-radius:14px;min-height:48px;font-size:.98rem}
 .template-guide strong{display:block;color:var(--brand);font-size:1rem}
 .template-guide .help{margin:4px 0 0;max-width:520px}
 @media(max-width:520px){.template-guide{align-items:stretch}.template-guide .btn{width:100%}}
+
+/* Progress Bar & Smooth View Transition */
+.top-loader{position:fixed;top:0;left:0;width:100%;height:3px;background:linear-gradient(90deg,#3B82F6,#60A5FA,#2563EB);z-index:99999;transform:translateX(-100%);transition:transform .25s ease,opacity .25s;pointer-events:none;opacity:0}
+.top-loader.active{opacity:1;animation:topLoaderAnim 1.2s infinite ease-in-out}
+@keyframes topLoaderAnim{0%{transform:translateX(-100%)}50%{transform:translateX(0%)}100%{transform:translateX(100%)}}
+.view-loading{opacity:.6;pointer-events:none;transition:opacity .15s ease}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
+  <!-- Top Animated Progress Loader -->
+  <div id="top-loader" class="top-loader"></div>
+
   <!-- Container Form Autentikasi / Login -->
   <div id="auth" class="hidden"></div>
 

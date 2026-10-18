@@ -280,33 +280,73 @@ function setErr(f, msg) {
 }
 
 /* ===================== LAPISAN API & CLIENT-SIDE CACHE ===================== */
-// Aksi tipe baca yang aman di-cache di memori browser
+// Aksi tipe baca yang aman di-cache di memori dan storage browser
 const READ_ACTIONS = new Set([
   'home', 'adminDashboardExtras', 'classList', 'classDetail', 'classDetailBundle',
   'materialList', 'materialGet', 'assignmentList', 'assignmentDetail', 'submissionList',
-  'quizList', 'quizPageData', 'bankSoalList', 'annList', 'usersList', 'gradesMy', 'gradesClass', 'me'
+  'quizList', 'quizPageData', 'bankSoalList', 'annList', 'usersList', 'gradesMine', 'gradesClass', 'me'
 ]);
-const ApiCache = new Map();
-const CACHE_TTL = 90000; // 90 detik di memori agar perpindahan menu terasa instan
+
+const CACHE_STORAGE_KEY = 'lms_api_cache_v2';
+const CACHE_TTL = 300000; // 5 menit
+
+const ApiCache = (() => {
+  const mem = new Map();
+  // Muat cache tersimpan dari sessionStorage saat pertama kali dibuka
+  try {
+    const saved = sessionStorage.getItem(CACHE_STORAGE_KEY);
+    if (saved) {
+      const obj = JSON.parse(saved);
+      const now = Date.now();
+      for (const k in obj) {
+        if (now - obj[k].time < CACHE_TTL) mem.set(k, obj[k]);
+      }
+    }
+  } catch (e) {}
+
+  function persist() {
+    try {
+      const obj = {};
+      const now = Date.now();
+      mem.forEach((v, k) => {
+        if (now - v.time < CACHE_TTL) obj[k] = v;
+      });
+      sessionStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {}
+  }
+
+  return {
+    get(k) {
+      const entry = mem.get(k);
+      if (!entry) return null;
+      if (Date.now() - entry.time > CACHE_TTL) {
+        mem.delete(k);
+        return null;
+      }
+      return entry.data;
+    },
+    getEntry(k) {
+      return mem.get(k) || null;
+    },
+    set(k, data) {
+      mem.set(k, { data: data, time: Date.now() });
+      persist();
+    },
+    clear() {
+      mem.clear();
+      try { sessionStorage.removeItem(CACHE_STORAGE_KEY); } catch (e) {}
+    }
+  };
+})();
 
 function invalidateApiCache() {
   ApiCache.clear();
 }
 
-// Dengan IS_PREVIEW = true, panggilan dijawab oleh PV (data dummy di browser).
-// Dengan IS_PREVIEW = false, panggilan diteruskan ke apiCall() di Code.gs melalui google.script.run atau fetch HTTP.
-function api(action, p, skipCache = false) {
-  p = p || {};
-  const isRead = READ_ACTIONS.has(action);
-  const cacheKey = isRead ? action + ':' + JSON.stringify(p) : null;
+// In-Flight Request Deduplication: mencegah beberapa request jaringan identik terpanggil bersamaan
+const InFlight = new Map();
 
-  if (isRead && !skipCache && ApiCache.has(cacheKey)) {
-    const entry = ApiCache.get(cacheKey);
-    if (Date.now() - entry.time < CACHE_TTL) {
-      return Promise.resolve(JSON.parse(JSON.stringify(entry.data)));
-    }
-  }
-
+function fetchApiServer(action, p) {
   let run;
   const isPreview = (window.CONFIG && typeof window.CONFIG.IS_PREVIEW === 'boolean') ? window.CONFIG.IS_PREVIEW : IS_PREVIEW;
   const gasUrl = (window.CONFIG && window.CONFIG.GAS_WEBAPP_URL) ? window.CONFIG.GAS_WEBAPP_URL.trim() : (localStorage.getItem('lms_gas_url') || '');
@@ -345,10 +385,40 @@ function api(action, p, skipCache = false) {
       'URL Google Apps Script belum dikonfigurasi. Masukkan URL Web App Apps Script (/exec) pada file js/config.js atau klik "Pengaturan Koneksi".'
     ));
   }
+  return run;
+}
 
-  return run.then(data => {
+function api(action, p, skipCache = false) {
+  p = p || {};
+  const isRead = READ_ACTIONS.has(action);
+  const cacheKey = isRead ? action + ':' + JSON.stringify(p) : null;
+
+  if (isRead && !skipCache) {
+    const cachedData = ApiCache.get(cacheKey);
+    if (cachedData !== null) {
+      // Data ditemukan di cache (kembalikan instan 0ms)
+      const entry = ApiCache.getEntry(cacheKey);
+      // Stale-While-Revalidate: Jika cache > 45 detik, perbarui diam-diam di background
+      if (entry && (Date.now() - entry.time > 45000) && !InFlight.has(cacheKey)) {
+        const bgReq = fetchApiServer(action, p).then(fresh => {
+          ApiCache.set(cacheKey, fresh);
+        }).catch(() => {}).finally(() => {
+          InFlight.delete(cacheKey);
+        });
+        InFlight.set(cacheKey, bgReq);
+      }
+      return Promise.resolve(JSON.parse(JSON.stringify(cachedData)));
+    }
+  }
+
+  // Deduplikasi: jika request identik sedang berjalan di jaringan, gunakan kembali promise tersebut
+  if (cacheKey && InFlight.has(cacheKey)) {
+    return InFlight.get(cacheKey).then(data => JSON.parse(JSON.stringify(data)));
+  }
+
+  const req = fetchApiServer(action, p).then(data => {
     if (isRead && cacheKey) {
-      ApiCache.set(cacheKey, { data, time: Date.now() });
+      ApiCache.set(cacheKey, data);
     } else if (!isRead) {
       // Setiap mutasi/penyimpanan otomatis menghapus cache lokal agar data selalu mutakhir
       invalidateApiCache();
@@ -357,7 +427,48 @@ function api(action, p, skipCache = false) {
   }).catch(err => {
     if (/Sesi tidak valid/.test(err.message) && action !== 'login') saveSession(null, null);
     throw err;
+  }).finally(() => {
+    if (cacheKey) InFlight.delete(cacheKey);
   });
+
+  if (cacheKey) InFlight.set(cacheKey, req);
+  return req;
+}
+
+let prefetching = false;
+function prefetchAppData() {
+  if (!state.user || !state.token || prefetching) return;
+  prefetching = true;
+  const role = state.user.role;
+  setTimeout(async () => {
+    try {
+      if (role === 'admin') {
+        await Promise.allSettled([
+          api('classList'),
+          api('usersList', { q: '', role: '' }),
+          api('annList')
+        ]);
+      } else if (role === 'guru') {
+        await Promise.allSettled([
+          api('classList'),
+          api('assignmentList'),
+          api('quizList'),
+          api('annList')
+        ]);
+      } else if (role === 'siswa') {
+        await Promise.allSettled([
+          api('classList'),
+          api('assignmentList'),
+          api('quizList'),
+          api('gradesMine'),
+          api('annList')
+        ]);
+      }
+    } catch (e) {
+    } finally {
+      prefetching = false;
+    }
+  }, 250);
 }
 
 /* ===================== DATA PREVIEW (MODE DEMO) ===================== */
@@ -953,6 +1064,9 @@ async function pageHome() {
   const [d, ex] = admin
     ? await Promise.all([api('home'), adminExtras()])
     : [await api('home'), null];
+  if (admin && ex && Array.isArray(ex.users)) {
+    ApiCache.set('usersList:{"q":"","role":""}', ex.users);
+  }
   const kalimat = u.role === 'siswa' ? 'Semangat belajar! Cek tugas, kuis, dan materi kamu hari ini di ' + SCHOOL_NAME + '.'
     : u.role === 'guru' ? 'Pantau tugas, kuis, dan nilai kelas Anda di ' + SCHOOL_NAME + ' dengan mudah.'
     : 'Kelola pengguna, kelas, dan seluruh aktivitas pembelajaran di ' + SCHOOL_NAME + ' dengan mudah.';
@@ -1245,7 +1359,12 @@ async function pageNilaiKelas(id) {
 async function pagePengguna() {
   const u = state.user;
   const role = state.filter || '';
-  const list = await api('usersList', { q: state.q || '', role: role });
+  const rawList = await api('usersList', { q: '', role: '' });
+  const q = String(state.q || '').trim().toLowerCase();
+  const list = (rawList || [])
+    .filter(x => !role || x.role === role)
+    .filter(x => !q || String(x.nama || '').toLowerCase().includes(q) || String(x.username || '').toLowerCase().includes(q))
+    .sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || '')));
   const chips = [['', 'Semua'], ['guru', 'Guru'], ['siswa', 'Siswa'], ['admin', 'Admin TU']]
     .map(c => '<button type="button" class="chip ' + (role === c[0] ? 'on' : '') + '" data-act="filter" data-role="' + c[0] + '">' + c[1] + '</button>').join('');
   
@@ -1363,19 +1482,40 @@ async function render() {
   const nm = String(state.user.nama || '');
   $('#uchip').innerHTML = '<span class="av">' + esc(initials(nm)) + '</span><span class="who"><b>' + esc(nm) + '</b><small>' + esc(roleName(state.user.role)) + '</small></span>';
   const seq = ++renderSeq;
-  $('#view').innerHTML = '<div class="empty">Memuat…</div>';
+  const viewEl = $('#view');
+  const topLoader = $('#top-loader');
+  const hasExistingContent = viewEl && viewEl.children.length > 0;
+
+  if (topLoader) topLoader.classList.add('active');
+  if (hasExistingContent) {
+    viewEl.classList.add('view-loading');
+  } else if (viewEl) {
+    viewEl.innerHTML = '<div class="empty">' + ic('sync', 'spin') + '<div>Memuat…</div></div>';
+  }
+
   try {
     const html = await pageFor(a, b, c);
     if (seq !== renderSeq) return;
-    $('#view').innerHTML = html;
-    loadPhotos($('#view'));
-    if (!a) startClock();
+    if (viewEl) {
+      viewEl.innerHTML = html;
+      viewEl.classList.remove('view-loading');
+    }
+    if (topLoader) topLoader.classList.remove('active');
+    loadPhotos(viewEl);
+    if (!a) {
+      startClock();
+      prefetchAppData();
+    }
     if (a === 'materi' && b === 'view') loadMateriFile();
     if (a === 'kuis' && c === 'kerjakan' && state.quiz) startQuizTimer();
   } catch (e) {
     if (seq !== renderSeq) return;
     if (!state.user) return render();
-    $('#view').innerHTML = '<div class="card err-card">' + ic('error') + ' ' + esc(e.message) + '</div>';
+    if (viewEl) {
+      viewEl.classList.remove('view-loading');
+      viewEl.innerHTML = '<div class="card err-card">' + ic('error') + ' ' + esc(e.message) + '</div>';
+    }
+    if (topLoader) topLoader.classList.remove('active');
   }
 }
 function logoutLocal() { saveSession(null, null); state.quiz = null; clearInterval(state.timer); location.hash = ''; render(); }
@@ -1690,6 +1830,7 @@ const forms = {
     const r = await api('login', { username: d.username.trim(), password: d.password });
     saveSession(r.token, r.user);
     go('#/');
+    prefetchAppData();
   },
   'pw-save': async f => {
     const d = fd(f);
