@@ -2900,18 +2900,7 @@ async function pageMateriList(kelasId) {
     rightPreview = '<div class="mat-preview-card"><div class="mat-preview-head"><h4>Preview Materi</h4></div>' + empty('Pilih materi untuk melihat pratinjau.') + '</div>';
   }
 
-  // Quick Upload Card (Kolom Kanan)
-  const rightUpload = '<div class="mat-upload-card">'
-    + '<h4>Upload Materi</h4>'
-    + '<div class="mat-quick-grid">'
-    + '<button type="button" class="mat-quick-tile q-yt" data-act="mat-quick-new" data-type="youtube" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-yt">' + ic('smart_display') + '</div><b>YouTube</b><small>Masukkan link video</small></button>'
-    + '<button type="button" class="mat-quick-tile q-drive" data-act="mat-quick-new" data-type="drive" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-drive">' + ic('add_to_drive') + '</div><b>Google Drive</b><small>Pilih dari Drive</small></button>'
-    + '<button type="button" class="mat-quick-tile q-file" data-act="mat-quick-new" data-type="upload" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-file">' + ic('cloud_upload') + '</div><b>Dari Perangkat</b><small>Upload file dari perangkat</small></button>'
-    + '<button type="button" class="mat-quick-tile q-link" data-act="mat-quick-new" data-type="drive" data-kelas="' + esc(aktifKId) + '"><div class="mat-q-ico qico-link">' + ic('link') + '</div><b>Tautan Website</b><small>Masukkan URL</small></button>'
-    + '</div>'
-    + '</div>';
-
-  const rightCol = '<div class="mat-right">' + rightPreview + (guru ? rightUpload : '') + '</div>';
+  const rightCol = '<div class="mat-right">' + rightPreview + '</div>';
 
   return banner + stats + '<div class="mat-layout">' + leftCol + rightCol + '</div>';
 }
