@@ -1974,24 +1974,29 @@ const APP_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 5
   + '<path d="M360 104l64 28-64 28-64-28z" fill="#F59E0B"/></svg>';
 
 function setManifest() {
-  const icon = 'data:image/svg+xml,' + encodeURIComponent(APP_ICON_SVG);
-  const manifest = {
-    name: APP_NAME,
-    short_name: 'EduDigital',
-    start_url: location.href,
-    display: 'standalone',
-    background_color: '#F8FAFC',
-    theme_color: '#1E3A8A',
-    icons: [
-      { src: icon, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-      { src: icon, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' }
-    ]
-  };
-  $('#manifest-link').setAttribute('href', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest)));
-  const apple = document.createElement('link');
-  apple.rel = 'apple-touch-icon';
-  apple.href = icon;
-  document.head.appendChild(apple);
+  try {
+    const icon = 'data:image/svg+xml,' + encodeURIComponent(APP_ICON_SVG);
+    const manifest = {
+      name: APP_NAME,
+      short_name: 'EduDigital',
+      start_url: location.href,
+      display: 'standalone',
+      background_color: '#F8FAFC',
+      theme_color: '#1E3A8A',
+      icons: [
+        { src: icon, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+        { src: icon, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' }
+      ]
+    };
+    const mLink = $('#manifest-link');
+    if (mLink) mLink.setAttribute('href', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest)));
+    const apple = document.createElement('link');
+    apple.rel = 'apple-touch-icon';
+    apple.href = icon;
+    document.head.appendChild(apple);
+  } catch (e) {
+    console.warn('Manifest warning:', e);
+  }
 }
 
 const OFFLINE_HTML = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title></head>'
@@ -2067,11 +2072,13 @@ function hideOffline() { $('#offline').classList.add('hidden'); }
 window.addEventListener('hashchange', () => render());
 window.addEventListener('offline', showOffline);
 window.addEventListener('online', () => { hideOffline(); render(); });
-setManifest();
-registerSW();
-if (isIOSSafari() && !isStandalone() && !recentlyDismissed()) {
-  showInstall('Di iPhone, ketuk ikon Bagikan lalu pilih "Tambahkan ke Layar Utama".', false);
-}
+try { setManifest(); } catch (e) { console.warn('setManifest error:', e); }
+try { registerSW(); } catch (e) { console.warn('registerSW error:', e); }
+try {
+  if (isIOSSafari() && !isStandalone() && !recentlyDismissed()) {
+    showInstall('Di iPhone, ketuk ikon Bagikan lalu pilih "Tambahkan ke Layar Utama".', false);
+  }
+} catch (e) { console.warn('install prompt error:', e); }
 if (!navigator.onLine) showOffline();
 render();
 
