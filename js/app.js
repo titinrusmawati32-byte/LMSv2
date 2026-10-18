@@ -287,14 +287,14 @@ const READ_ACTIONS = new Set([
   'quizList', 'quizPageData', 'bankSoalList', 'annList', 'usersList', 'gradesMine', 'gradesClass', 'me'
 ]);
 
-const CACHE_STORAGE_KEY = 'lms_api_cache_v2';
-const CACHE_TTL = 300000; // 5 menit
+const CACHE_STORAGE_KEY = 'lms_api_cache_v3';
+const CACHE_TTL = 600000; // 10 menit
 
 const ApiCache = (() => {
   const mem = new Map();
-  // Muat cache tersimpan dari sessionStorage saat pertama kali dibuka
+  // Muat cache tersimpan dari localStorage / sessionStorage saat pertama kali dibuka
   try {
-    const saved = sessionStorage.getItem(CACHE_STORAGE_KEY);
+    const saved = localStorage.getItem(CACHE_STORAGE_KEY) || sessionStorage.getItem(CACHE_STORAGE_KEY);
     if (saved) {
       const obj = JSON.parse(saved);
       const now = Date.now();
@@ -311,7 +311,8 @@ const ApiCache = (() => {
       mem.forEach((v, k) => {
         if (now - v.time < CACHE_TTL) obj[k] = v;
       });
-      sessionStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(obj));
+      const str = JSON.stringify(obj);
+      try { localStorage.setItem(CACHE_STORAGE_KEY, str); } catch (e) { sessionStorage.setItem(CACHE_STORAGE_KEY, str); }
     } catch (e) {}
   }
 
@@ -332,15 +333,94 @@ const ApiCache = (() => {
       mem.set(k, { data: data, time: Date.now() });
       persist();
     },
+    deleteByPrefix(prefixes) {
+      let changed = false;
+      mem.forEach((_, k) => {
+        if (prefixes.some(p => k.startsWith(p))) { mem.delete(k); changed = true; }
+      });
+      if (changed) persist();
+    },
     clear() {
       mem.clear();
+      try { localStorage.removeItem(CACHE_STORAGE_KEY); } catch (e) {}
       try { sessionStorage.removeItem(CACHE_STORAGE_KEY); } catch (e) {}
     }
   };
 })();
 
-function invalidateApiCache() {
+// Cache Tampilan HTML Instan (0 ms navigation)
+const ViewCache = (() => {
+  const mem = new Map();
+  return {
+    get(k) {
+      if (!k) return null;
+      if (mem.has(k)) return mem.get(k);
+      try {
+        const raw = sessionStorage.getItem('lms_vc_' + k);
+        if (raw) { mem.set(k, raw); return raw; }
+      } catch (e) {}
+      return null;
+    },
+    set(k, html) {
+      if (!k || !html) return;
+      mem.set(k, html);
+      try { sessionStorage.setItem('lms_vc_' + k, html); } catch (e) {}
+    },
+    delete(k) {
+      mem.delete(k);
+      try { sessionStorage.removeItem('lms_vc_' + k); } catch (e) {}
+    },
+    clear() {
+      mem.clear();
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith('lms_vc_')) sessionStorage.removeItem(key);
+        }
+      } catch (e) {}
+    }
+  };
+})();
+
+function invalidateApiCache(action = '') {
+  if (action === 'quizSaveDraft' || action === 'quizStart') return;
+  if (/^bankSoal|^quiz/.test(action)) {
+    ApiCache.deleteByPrefix(['quizList', 'quizPageData', 'bankSoalList']);
+    ViewCache.delete('kuis');
+    ViewCache.delete('kuis_daftar');
+    ViewCache.delete('kuis_bank');
+    return;
+  }
+  if (/^assignment|^submission/.test(action)) {
+    ApiCache.deleteByPrefix(['assignmentList', 'assignmentDetail', 'submissionList', 'gradesMine', 'gradesClass']);
+    ViewCache.delete('tugas');
+    ViewCache.delete('nilai');
+    return;
+  }
+  if (/^material/.test(action)) {
+    ApiCache.deleteByPrefix(['materialList', 'materialGet']);
+    ViewCache.delete('materi');
+    return;
+  }
+  if (/^class/.test(action)) {
+    ApiCache.deleteByPrefix(['classList', 'classDetail', 'classDetailBundle']);
+    ViewCache.delete('kelas');
+    return;
+  }
+  if (/^user/.test(action)) {
+    ApiCache.deleteByPrefix(['usersList', 'home', 'adminDashboardExtras']);
+    ViewCache.delete('pengguna');
+    ViewCache.delete('home');
+    return;
+  }
+  if (/^ann/.test(action)) {
+    ApiCache.deleteByPrefix(['annList', 'home']);
+    ViewCache.delete('pengumuman');
+    ViewCache.delete('home');
+    return;
+  }
   ApiCache.clear();
+  ViewCache.clear();
 }
 
 // In-Flight Request Deduplication: mencegah beberapa request jaringan identik terpanggil bersamaan
@@ -398,8 +478,8 @@ function api(action, p, skipCache = false) {
     if (cachedData !== null) {
       // Data ditemukan di cache (kembalikan instan 0ms)
       const entry = ApiCache.getEntry(cacheKey);
-      // Stale-While-Revalidate: Jika cache > 45 detik, perbarui diam-diam di background
-      if (entry && (Date.now() - entry.time > 45000) && !InFlight.has(cacheKey)) {
+      // Stale-While-Revalidate: Jika cache > 30 detik, perbarui diam-diam di background
+      if (entry && (Date.now() - entry.time > 30000) && !InFlight.has(cacheKey)) {
         const bgReq = fetchApiServer(action, p).then(fresh => {
           ApiCache.set(cacheKey, fresh);
         }).catch(() => {}).finally(() => {
@@ -420,8 +500,8 @@ function api(action, p, skipCache = false) {
     if (isRead && cacheKey) {
       ApiCache.set(cacheKey, data);
     } else if (!isRead) {
-      // Setiap mutasi/penyimpanan otomatis menghapus cache lokal agar data selalu mutakhir
-      invalidateApiCache();
+      // Setiap mutasi/penyimpanan otomatis menghapus cache lokal terkait agar data selalu mutakhir
+      invalidateApiCache(action);
     }
     return data;
   }).catch(err => {
@@ -445,6 +525,7 @@ function prefetchAppData() {
       if (role === 'admin') {
         await Promise.allSettled([
           api('classList'),
+          api('quizPageData'),
           api('usersList', { q: '', role: '' }),
           api('annList')
         ]);
@@ -452,7 +533,7 @@ function prefetchAppData() {
         await Promise.allSettled([
           api('classList'),
           api('assignmentList'),
-          api('quizList'),
+          api('quizPageData'),
           api('annList')
         ]);
       } else if (role === 'siswa') {
@@ -468,7 +549,7 @@ function prefetchAppData() {
     } finally {
       prefetching = false;
     }
-  }, 250);
+  }, 100);
 }
 
 /* ===================== DATA PREVIEW (MODE DEMO) ===================== */
@@ -1640,13 +1721,22 @@ async function render() {
   const seq = ++renderSeq;
   const viewEl = $('#view');
   const topLoader = $('#top-loader');
-  const hasExistingContent = viewEl && viewEl.children.length > 0;
 
-  if (topLoader) topLoader.classList.add('active');
-  if (hasExistingContent) {
-    viewEl.classList.add('view-loading');
+  // Rute utama yang mendukung Instant View Navigation (0 ms)
+  const isCacheable = !c && (a !== 'kuis' || !b);
+  const routeKey = a === 'kuis' ? ('kuis_' + (state.kuisTab || 'daftar')) : (a || 'home');
+  const cachedHtml = isCacheable ? ViewCache.get(routeKey) : null;
+
+  if (cachedHtml && viewEl) {
+    // ⚡ INSTANT VIEW: Langsung tampilkan halaman dalam 0 milidetik tanpa jeda!
+    viewEl.innerHTML = cachedHtml;
+    viewEl.classList.remove('view-loading');
+    if (topLoader) topLoader.classList.add('active'); // Indikator sinkronisasi di latar belakang
+    loadPhotos(viewEl);
   } else if (viewEl) {
-    viewEl.innerHTML = '<div class="empty">' + ic('sync', 'spin') + '<div>Memuat…</div></div>';
+    if (topLoader) topLoader.classList.add('active');
+    viewEl.innerHTML = '<div class="page-head"><h2 class="pt">' + (TITLES[a] || 'Beranda') + '</h2></div>'
+      + '<div class="empty">' + ic('sync', 'spin') + '<div>Memuat data ' + (TITLES[a] || 'Beranda') + '…</div></div>';
   }
 
   try {
@@ -1655,13 +1745,16 @@ async function render() {
     if (viewEl) {
       viewEl.innerHTML = html;
       viewEl.classList.remove('view-loading');
+      if (isCacheable && html) {
+        ViewCache.set(routeKey, html);
+      }
     }
     if (topLoader) topLoader.classList.remove('active');
     loadPhotos(viewEl);
     if (!a) {
       startClock();
-      prefetchAppData();
     }
+    prefetchAppData();
     if (a === 'materi' && b === 'view') loadMateriFile();
     if (a === 'kuis' && c === 'kerjakan' && state.quiz) startQuizTimer();
   } catch (e) {
@@ -1674,7 +1767,15 @@ async function render() {
     if (topLoader) topLoader.classList.remove('active');
   }
 }
-function logoutLocal() { saveSession(null, null); state.quiz = null; clearInterval(state.timer); location.hash = ''; render(); }
+function logoutLocal() {
+  saveSession(null, null);
+  state.quiz = null;
+  clearInterval(state.timer);
+  ViewCache.clear();
+  ApiCache.clear();
+  location.hash = '';
+  render();
+}
 
 /* ===================== TAMBAHAN MODAL MENGUNGGAH ===================== */
 function uploadExcelForm(type, classId) {
