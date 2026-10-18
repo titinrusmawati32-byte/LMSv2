@@ -1444,6 +1444,21 @@ const HANDLERS = {
     return true;
   },
 
+  // Hapus semua soal dari Bank Soal milik user (guru: miliknya, admin: semua)
+  bankSoalDeleteAll: (u, p) => {
+    need(u, ['guru', 'admin']);
+    const rows = table('Bank_Soal').rows;
+    const toDelete = u.role === 'admin' ? rows : rows.filter(x => x.dibuat_oleh === u.id);
+    const count = toDelete.length;
+    if (!count) throw new Error('Tidak ada soal untuk dihapus.');
+    if (u.role === 'admin') {
+      removeWhere('Bank_Soal', () => true);
+    } else {
+      removeWhere('Bank_Soal', x => x.dibuat_oleh === u.id);
+    }
+    return { deleted: count };
+  },
+
   // Simpan draf berkala jawaban siswa saat ujian berlangsung (Autosave)
   quizSaveDraft: (u, p) => {
     need(u, ['siswa']);

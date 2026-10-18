@@ -1322,6 +1322,7 @@ async function pageKuis() {
       + '<div class="row"><input type="search" placeholder="Cari pertanyaan, materi, atau bab..." value="' + esc(state.bankSearch || '') + '" data-act="bank-search-input" style="max-width:400px;margin:0;">'
       + '<div class="row-g">'
       + (bank.length ? '<button type="button" class="btn sec sm" data-act="bank-preview">' + ic('preview') + ' Pratinjau Massal (' + bank.length + ')</button>' : '')
+      + (bank.length ? '<button type="button" class="btn sec sm" data-act="bank-soal-del-all" style="color:var(--bad-main);border-color:var(--bad-main);">' + ic('delete_sweep') + ' Hapus Semua (' + bank.length + ')</button>' : '')
       + '<button type="button" class="btn sm" data-act="bank-soal-new">' + ic('add') + ' Buat Soal Baru</button>'
       + '</div></div>'
       + (mapels.length ? '<div class="chips mt" style="margin-top:12px;">' + filterChips + '</div>' : '')
@@ -1850,6 +1851,11 @@ const actions = {
   'bank-soal-del': el => confirmBox('Hapus soal ini dari Bank Soal?', async () => {
     await api('bankSoalDelete', { id: el.dataset.id });
     toast('Soal dihapus dari Bank Soal');
+    render();
+  }),
+  'bank-soal-del-all': () => confirmBox('⚠️ HAPUS SEMUA SOAL di Bank Soal?\nTindakan ini tidak dapat dibatalkan!', async () => {
+    const r = await api('bankSoalDeleteAll');
+    toast('Berhasil menghapus ' + (r.deleted || 0) + ' soal dari Bank Soal');
     render();
   }),
 
