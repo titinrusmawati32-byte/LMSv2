@@ -1,11 +1,21 @@
 /**
- * KONFIGURASI APLIKASI LMS (Vercel & GitHub)
+ * KONFIGURASI APLIKASI LMS (Vercel, Cloudflare & GitHub)
  * SDN Sumberejo 04
  */
 
+// Migrasi otomatis jika browser masih menyimpan URL lama langsung ke script.google.com
+(function() {
+  try {
+    const saved = localStorage.getItem('lms_gas_url');
+    if (saved && saved.includes('script.google.com')) {
+      localStorage.removeItem('lms_gas_url');
+    }
+  } catch (e) {}
+})();
+
 window.CONFIG = {
-  // URL Web App Google Apps Script backend SDN Sumberejo 04
-  GAS_WEBAPP_URL: localStorage.getItem('lms_gas_url') || 'https://script.google.com/macros/s/AKfycbzBdb8b8SZgxQm0bneREy1dtwLs7TWDxUJPFcHhrA2L7evxXvy8_j_JkQUfDcM3M64GrA/exec',
+  // URL Edge Accelerator Cloudflare Worker (terhubung ke Google Apps Script)
+  GAS_WEBAPP_URL: localStorage.getItem('lms_gas_url') || 'https://lmsv2.titin-rusmawati32.workers.dev',
 
   // Set false untuk koneksi nyata ke Google Sheets melalui Google Apps Script.
   // Set true jika ingin mencoba tampilan dengan data tiruan (dummy).
